@@ -84,10 +84,10 @@ ensure_venv_support() {
     local pyver pkg
     pyver="$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")' 2>/dev/null)"
     log "python3 -m venv is unavailable; installing python${pyver}-venv"
-    ${sudo_cmd} apt-get update -y >/dev/null 2>&1 || true
+    apt_get update -y >/dev/null 2>&1 || true
     for pkg in "python${pyver}-venv" "python3-venv"; do
       [[ -n "${pyver}" ]] || [[ "${pkg}" == "python3-venv" ]] || continue
-      if ${sudo_cmd} apt-get install -y "${pkg}" >/dev/null 2>&1; then
+      if apt_get install -y "${pkg}" >/dev/null 2>&1; then
         log "installed ${pkg}"
         break
       fi
@@ -129,8 +129,12 @@ ensure_aws_cli() {
 
   if ! have_cmd unzip; then
     if have_cmd apt-get; then
-      ${sudo_cmd} apt-get update -y >/dev/null 2>&1 || true
-      ${sudo_cmd} apt-get install -y unzip >/dev/null 2>&1 || true
+      # Through apt_get so a first-boot dpkg lock is waited out rather than
+      # silently swallowed - a failure here used to surface only as the
+      # much less helpful "could not install the AWS CLI".
+      apt_get update -y >/dev/null 2>&1 || true
+      apt_get install -y unzip >/dev/null 2>&1 \
+        || warn "apt could not install unzip (lock held, or no network?)"
     elif have_cmd dnf; then
       ${sudo_cmd} dnf install -y unzip >/dev/null 2>&1 || true
     elif have_cmd yum; then
@@ -162,9 +166,53 @@ ensure_aws_cli() {
   return 1
 }
 
+# ------------------------------------------------------------------
+# Registry helpers
+#
+# REGISTRY may be written with or without a namespace path - build-all.sh
+# appends the image name itself, so both of these are valid:
+#   022633198646.dkr.ecr.ap-south-1.amazonaws.com
+#   022633198646.dkr.ecr.ap-south-1.amazonaws.com/agentic-rl-bench
+#
+# Every ECR check used to be the glob `*.dkr.ecr.*.amazonaws.com/*`, and
+# that trailing `/*` REQUIRES a path. So the bare-hostname form matched
+# nothing and every ECR code path silently became a no-op: no
+# `docker login`, no repository creation, no inline pull credential for the
+# template build. The symptom arrived minutes later as a `docker push`
+# failing with "no basic auth credentials" - which names neither the cause
+# nor the setting responsible. Hence these helpers: one definition of "is
+# this ECR", used everywhere.
+# ------------------------------------------------------------------
+
+# True when REGISTRY points at ECR, with or without a namespace path.
+registry_is_ecr() {
+  local host="${REGISTRY:-}"
+  [[ "${host%%/*}" == *.dkr.ecr.*.amazonaws.com ]]
+}
+
+# REGISTRY without any namespace path.
+ecr_registry_host() {
+  local reg="${REGISTRY:-}"
+  echo "${reg%%/*}"
+}
+
+# Region out of <account>.dkr.ecr.<region>.amazonaws.com
+ecr_registry_region() {
+  ecr_registry_host | cut -d. -f4
+}
+
+# The namespace path, empty when REGISTRY is a bare hostname. Repository
+# names are "<namespace>/<image>" when it is set and plain "<image>" when
+# it is not.
+ecr_namespace() {
+  local reg="${REGISTRY:-}"
+  [[ "${reg}" == */* ]] || return 0
+  echo "${reg#*/}"
+}
+
 # True when this run needs AWS at all.
 needs_aws() {
-  [[ "${REGISTRY:-}" == *.dkr.ecr.*.amazonaws.com/* ]] || [[ -n "${S3_BUCKET:-}" ]]
+  registry_is_ecr || [[ -n "${S3_BUCKET:-}" ]]
 }
 
 # Load .env WITHOUT clobbering variables already present in the
@@ -189,7 +237,7 @@ load_env() {
 
 # ECR login when REGISTRY points at ECR, for the local `docker push`.
 ecr_login_if_needed() {
-  if [[ "${REGISTRY:-}" != *.dkr.ecr.*.amazonaws.com/* ]]; then
+  if ! registry_is_ecr; then
     return 0
   fi
   if ! have_cmd aws; then
@@ -198,8 +246,8 @@ ecr_login_if_needed() {
      or switch REGISTRY to a local registry, e.g. REGISTRY=127.0.0.1:5000/arl"
   fi
   local host region
-  host="$(echo "${REGISTRY}" | cut -d/ -f1)"
-  region="$(echo "${host}" | cut -d. -f4)"
+  host="$(ecr_registry_host)"
+  region="$(ecr_registry_region)"
 
   # Verify credentials first. Otherwise the failure surfaces as the very
   # confusing "Cannot perform an interactive login from a non TTY device"
@@ -245,12 +293,12 @@ export_registry_credentials() {
     log "using REGISTRY_USERNAME from the environment for template pulls"
     return 0
   fi
-  if [[ "${REGISTRY:-}" != *.dkr.ecr.*.amazonaws.com/* ]]; then
+  if ! registry_is_ecr; then
     return 0
   fi
   local host region token
-  host="$(echo "${REGISTRY}" | cut -d/ -f1)"
-  region="$(echo "${host}" | cut -d. -f4)"
+  host="$(ecr_registry_host)"
+  region="$(ecr_registry_region)"
   # Fatal rather than a warning, because the deferred symptom is very hard
   # to read: with no credential inline, Cube's native export falls back to
   # the host's docker credential store, and a stale ECR token there fails
@@ -377,4 +425,55 @@ root_disk_device() {
   [[ -n "${root_src}" ]] || return 0
   root_disk="$(lsblk -no PKNAME "${root_src}" 2>/dev/null | tr -d ' ' | head -1 || true)"
   [[ -n "${root_disk}" ]] && echo "/dev/${root_disk}"
+}
+
+# ------------------------------------------------------------------
+# apt on a freshly booted cloud image
+#
+# cloud-init and unattended-upgrades hold the dpkg lock for the first
+# minutes after boot, and the package installs in this suite were written
+# as `apt-get install ... >/dev/null 2>&1 || true`. On a fresh instance
+# they therefore failed SILENTLY, and the caller only noticed indirectly:
+# ensure_aws_cli could not install `unzip`, gave up, and setup-host.sh died
+# with "could not install the AWS CLI" on a host whose only real problem
+# was being forty seconds old.
+#
+# tools/02-prepare-disks.sh already waited for cloud-init for exactly this
+# reason ("apt is locked during Ubuntu's first boot"); the scripts/ flow,
+# which is the path a user takes when they SSH into the box themselves, did
+# not. These two helpers close that gap.
+# ------------------------------------------------------------------
+
+_APT_READY=0
+
+# Wait for cloud-init to finish, at most once per shell.
+apt_ready() {
+  (( _APT_READY )) && return 0
+  _APT_READY=1
+  have_cmd cloud-init || return 0
+  local st
+  st="$(cloud-init status 2>/dev/null || true)"
+  case "${st}" in
+    *done*|*disabled*|*"not run"*) return 0 ;;
+  esac
+  log "waiting for cloud-init to finish (it holds the apt lock on first boot)"
+  if timeout "${CLOUD_INIT_WAIT:-600}" cloud-init status --wait >/dev/null 2>&1; then
+    log "cloud-init finished"
+  else
+    warn "cloud-init is still not done after ${CLOUD_INIT_WAIT:-600}s; continuing.
+     If a package install fails below, that is probably why - wait and re-run."
+  fi
+}
+
+# apt-get that waits for the lock instead of failing on it.
+#
+# DPkg::Lock::Timeout makes apt itself block for the lock, which is both
+# simpler and more reliable than polling with fuser - and needs no psmisc,
+# which a minimal cloud image does not have. Adds sudo when not root, so
+# call sites do not each repeat that.
+apt_get() {
+  local sudo_cmd=""
+  [[ "${EUID}" -ne 0 ]] && sudo_cmd="sudo"
+  apt_ready
+  ${sudo_cmd} apt-get -o DPkg::Lock::Timeout="${APT_LOCK_WAIT:-300}" "$@"
 }

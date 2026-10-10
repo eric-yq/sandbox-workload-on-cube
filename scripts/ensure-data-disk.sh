@@ -219,8 +219,10 @@ fi
 if ! have_cmd mkfs.xfs || ! have_cmd xfs_info; then
   log "installing xfsprogs"
   if have_cmd apt-get; then
-    run apt-get update -qq
-    run env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq xfsprogs
+    # apt_get waits out a first-boot dpkg lock; on a fresh instance this
+    # would otherwise fail and strand the whole run at step 2.
+    run apt_get update -qq
+    run env DEBIAN_FRONTEND=noninteractive apt_get install -y -qq xfsprogs
   elif have_cmd dnf; then
     run dnf install -y xfsprogs
   else

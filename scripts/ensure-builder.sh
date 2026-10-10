@@ -141,10 +141,45 @@ install_rhel_family() {
        docker-buildx-plugin
 }
 
+# ---------- apt on a freshly booted cloud image ----------
+# cloud-init and unattended-upgrades hold the dpkg lock for the first few
+# minutes after boot. The apt-get calls below are NOT `|| true`, and this
+# script is step 1 of setup-host.sh, so a held lock aborts the entire run
+# before anything else happens - on a host whose only problem is being a
+# minute old.
+#
+# Two parts: wait for cloud-init, then let apt itself block on the lock.
+# DPkg::Lock::Timeout is used rather than polling with fuser because it
+# needs no extra package (psmisc is absent from minimal cloud images).
+#
+# Duplicated from scripts/_lib.sh on purpose: this file is deliberately
+# standalone, so that it can be run or sourced on its own.
+APT_LOCK_WAIT="${APT_LOCK_WAIT:-300}"
+
+apt_wait_ready() {
+  command -v cloud-init >/dev/null 2>&1 || return 0
+  local st
+  st="$(cloud-init status 2>/dev/null || true)"
+  case "${st}" in
+    *done*|*disabled*|*"not run"*) return 0 ;;
+  esac
+  log "waiting for cloud-init to finish (it holds the apt lock on first boot)"
+  if timeout "${CLOUD_INIT_WAIT:-600}" cloud-init status --wait >/dev/null 2>&1; then
+    log "cloud-init finished"
+  else
+    warn "cloud-init still not done after ${CLOUD_INIT_WAIT:-600}s; continuing"
+  fi
+}
+
+apt_priv() {
+  run_priv apt-get -o DPkg::Lock::Timeout="${APT_LOCK_WAIT}" "$@"
+}
+
 install_debian_family() {
   log "installing docker for ${OS_ID} ${OS_VER} via Docker official repo"
-  run_priv apt-get update -y
-  run_priv apt-get install -y ca-certificates curl gnupg
+  apt_wait_ready
+  apt_priv update -y
+  apt_priv install -y ca-certificates curl gnupg
 
   local keyring="/etc/apt/keyrings/docker.gpg"
   run_priv install -m 0755 -d /etc/apt/keyrings
@@ -160,8 +195,8 @@ install_debian_family() {
 https://download.docker.com/linux/${OS_ID} ${codename} stable" \
     | run_priv tee /etc/apt/sources.list.d/docker.list >/dev/null
 
-  run_priv apt-get update -y
-  run_priv apt-get install -y docker-ce docker-ce-cli containerd.io \
+  apt_priv update -y
+  apt_priv install -y docker-ce docker-ce-cli containerd.io \
     docker-buildx-plugin
 }
 

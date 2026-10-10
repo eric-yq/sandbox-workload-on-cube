@@ -62,19 +62,22 @@ IMAGES=(
 )
 
 ensure_ecr_repos() {
-  [[ "${REGISTRY}" == *.dkr.ecr.*.amazonaws.com/* ]] || return 0
+  registry_is_ecr || return 0
   if ! have_cmd aws; then
     ensure_aws_cli || die "REGISTRY is ECR but the AWS CLI is unavailable"
   fi
-  local ecr_host ecr_region ecr_prefix name repo
-  ecr_host="$(echo "${REGISTRY}" | cut -d/ -f1)"
-  ecr_region="$(echo "${ecr_host}" | cut -d. -f4)"
-  ecr_prefix="${REGISTRY#*/}"
+  local ecr_region ecr_prefix name repo
+  ecr_region="$(ecr_registry_region)"
+  # Empty when REGISTRY is a bare hostname, in which case the repository is
+  # just the image name. `${REGISTRY#*/}` used to be used here, which on a
+  # bare hostname expands to the hostname itself and would have created a
+  # repository literally named "<host>/arl-sandbox".
+  ecr_prefix="$(ecr_namespace)"
 
-  log "ensuring ECR repositories exist under ${ecr_prefix}/"
+  log "ensuring ECR repositories exist${ecr_prefix:+ under ${ecr_prefix}/}"
   for entry in "${IMAGES[@]}"; do
     name="${entry%%:*}"
-    repo="${ecr_prefix}/${name}"
+    repo="${ecr_prefix:+${ecr_prefix}/}${name}"
     if aws ecr describe-repositories --region "${ecr_region}" \
          --repository-names "${repo}" >/dev/null 2>&1; then
       echo "    [ok]      ${repo}"

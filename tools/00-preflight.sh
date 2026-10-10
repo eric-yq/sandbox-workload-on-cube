@@ -200,7 +200,10 @@ if [[ -z "${IAM_INSTANCE_PROFILE}" ]]; then
      CubeSandbox mints its own ECR token to pull the template image.
      Without a profile, 03-setup-env.sh fails at the build step with a 401 and
      04-provision-templates.sh cannot pull. Set one, or use a non-ECR REGISTRY."
-  [[ "${REGISTRY}" == *.dkr.ecr.*.amazonaws.com/* ]] && fail=1
+  # Path-independent: REGISTRY may be a bare ECR hostname or carry a
+  # namespace. (scripts/_lib.sh has registry_is_ecr for this, but the
+  # tools/ scripts source tools/lib.sh instead.)
+  [[ "${REGISTRY%%/*}" == *.dkr.ecr.*.amazonaws.com ]] && fail=1
 else
   if aws_ iam get-instance-profile --instance-profile-name "${IAM_INSTANCE_PROFILE}" >/dev/null 2>&1; then
     log "ok: instance profile ${IAM_INSTANCE_PROFILE}"

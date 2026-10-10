@@ -150,7 +150,7 @@ echo "############################################################"
 # Only the ECR path and S3 result upload need it; result upload itself goes
 # through boto3 in the venv. A local-registry run skips this entirely.
 if needs_aws; then
-  if [[ "${REGISTRY}" == *.dkr.ecr.*.amazonaws.com/* ]]; then
+  if registry_is_ecr; then
     log "REGISTRY is ECR -> AWS CLI required"
   else
     log "S3_BUCKET is set -> AWS CLI useful for credential checks"
