@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Profile</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<nav>
+  <a href="/">Home</a>
+  <a href="/cart.html">Cart</a>
+  <a href="/orders.html">Orders</a>
+  <a href="/profile.html">Profile</a>
+</nav>
+
+<main>
+  <h1>Account profile</h1>
+  <form id="profile-form" class="form" autocomplete="off">
+    <label>Username <input id="username" type="text" name="username" value="alice"></label>
+    <label>Email    <input id="email"    type="email" name="email" value="alice@example.com"></label>
+    <label>Membership tier
+      <select id="tier" name="tier">
+        <option>bronze</option><option selected>gold</option><option>platinum</option>
+      </select>
+    </label>
+    <button id="save-profile" type="button" class="btn primary">Save</button>
+  </form>
+  <p id="profile-status" aria-live="polite"></p>
+
+  <section>
+    <h2>Recently viewed</h2>
+    <div id="recent-grid" class="grid grid-small"></div>
+  </section>
+</main>
+
+<script src="/data.js"></script>
+<script src="/app.js"></script>
+<script>
+  Shop.boot({ container: 'recent-grid', mode: 'profile', pageSize: 8 });
+</script>
+</body>
+</html>

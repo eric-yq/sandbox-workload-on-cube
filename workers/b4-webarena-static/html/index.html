@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Bench Shop</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<nav>
+  <a href="/">Home</a>
+  <a href="/cart.html">Cart</a>
+  <a href="/orders.html">Orders</a>
+  <a href="/profile.html">Profile</a>
+  <span class="search-wrap">
+    <input id="search-box" type="text" placeholder="Search products" />
+    <button id="search-btn" type="button">Search</button>
+  </span>
+</nav>
+
+<main>
+  <h1>Featured items</h1>
+  <div class="toolbar">
+    <button class="sort-price">Sort by price</button>
+    <button class="sort-rating">Sort by rating</button>
+    <button class="sort-name">Sort by name</button>
+  </div>
+
+  <div id="grid" class="grid"></div>
+
+  <div class="pagination">
+    <button id="load-more">Load more</button>
+    <span id="page-info"></span>
+  </div>
+</main>
+
+<script src="/data.js"></script>
+<script src="/app.js"></script>
+<script>
+  // Initial render: top page (24 items).
+  Shop.boot({ container: 'grid', mode: 'index', pageSize: 24 });
+</script>
+</body>
+</html>

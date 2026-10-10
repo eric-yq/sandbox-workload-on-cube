@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Checkout</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<nav>
+  <a href="/">Home</a>
+  <a href="/cart.html">Cart</a>
+  <a href="/orders.html">Orders</a>
+  <a href="/profile.html">Profile</a>
+</nav>
+
+<main>
+  <h1>Checkout</h1>
+  <form id="checkout-form" class="form" autocomplete="off">
+    <label>Name <input id="name" type="text" name="name" required></label>
+    <label>Email <input id="email" type="email" name="email" required></label>
+    <label>Shipping address <input id="address" type="text" name="address" required></label>
+
+    <fieldset>
+      <legend>Payment</legend>
+      <label><input type="radio" id="payment-card"   name="payment" value="card" checked> Credit card</label>
+      <label><input type="radio" id="payment-paypal" name="payment" value="paypal"> PayPal</label>
+      <label><input type="radio" id="payment-cod"    name="payment" value="cod"> Cash on delivery</label>
+    </fieldset>
+
+    <button id="place-order" type="button" class="btn primary">Place order</button>
+  </form>
+  <p id="order-status" aria-live="polite"></p>
+</main>
+
+<script src="/data.js"></script>
+<script src="/app.js"></script>
+<script>
+  Shop.boot({ mode: 'checkout' });
+</script>
+</body>
+</html>

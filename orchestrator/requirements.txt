@@ -1,0 +1,11 @@
+httpx==0.27.2
+boto3==1.35.40
+psutil==6.0.0
+numpy==1.26.4
+pyyaml==6.0.2
+uvloop==0.21.0
+# Only used by CUBE_TRANSPORT=direct, which reads the per-sandbox IP out of
+# the Redis routing map that CubeMaster writes and CubeProxy reads (no API
+# returns it). Imported lazily, so a run on the default `path` transport
+# never touches it.
+redis==5.2.1

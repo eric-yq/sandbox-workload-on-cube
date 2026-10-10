@@ -1,0 +1,7 @@
+# Datasets are fetched at build time by scripts/fetch-datasets.sh.
+# Don't commit them - they're regenerated per build host.
+*.jsonl
+*.jsonl.gz
+*.json
+!.gitignore
+!README.md

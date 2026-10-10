@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Cart</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<nav>
+  <a href="/">Home</a>
+  <a href="/cart.html">Cart</a>
+  <a href="/orders.html">Orders</a>
+  <a href="/profile.html">Profile</a>
+</nav>
+
+<main>
+  <h1>Shopping cart</h1>
+  <table id="cart-table" class="cart">
+    <thead><tr><th>Item</th><th>Qty</th><th>Price</th><th>Subtotal</th></tr></thead>
+    <tbody id="cart-body"></tbody>
+  </table>
+  <p class="totals">Total: <span id="cart-total">$0.00</span></p>
+  <a id="checkout-link" class="btn primary" href="/checkout.html">Proceed to checkout</a>
+</main>
+
+<script src="/data.js"></script>
+<script src="/app.js"></script>
+<script>
+  Shop.boot({ container: 'cart-body', mode: 'cart' });
+</script>
+</body>
+</html>

@@ -1,0 +1,202 @@
+{
+  "benchmark": "B1",
+  "instance": {
+    "instance_type": "c7i.metal-24xl",
+    "instance_id": "i-06315c5a71102e2d0",
+    "region": "us-east-1",
+    "az": "us-east-1f",
+    "arch": "x86_64",
+    "kernel": "7.0.0-1013-aws",
+    "cpu_model": "Intel(R) Xeon(R) Platinum 8488C",
+    "vcpus": 96,
+    "physical_cores": 48,
+    "threads_per_core": 2.0,
+    "smt": true
+  },
+  "concurrency": 32,
+  "duration_sec": 90,
+  "throughput": {
+    "executions_per_sec": 1051.7333333333333,
+    "rollouts_per_sec": 32.86666666666667,
+    "total_executions": 94656,
+    "total_rollouts": 2958
+  },
+  "latency_ms": {
+    "rollout": {
+      "count": 2958,
+      "errors": 0,
+      "p50": 839.4969925000169,
+      "p95": 3137.609273999783,
+      "p99": 3312.1299098402274,
+      "mean": 987.6424540260316,
+      "max": 8046.608712999841
+    },
+    "sandbox": {
+      "sandbox_create": {
+        "count": 2958,
+        "p50": 86.184734499966,
+        "p95": 96.74206970014438,
+        "p99": 104.07353825010887,
+        "mean": 87.10505327991778,
+        "max": 178.42632900010358
+      },
+      "steps": {
+        "count": 2958,
+        "p50": 680.1953960000446,
+        "p95": 2981.73651990021,
+        "p99": 3144.8777505501625,
+        "mean": 828.5528526741047,
+        "max": 7858.279052999933
+      },
+      "sandbox_release": {
+        "count": 2958,
+        "p50": 69.83108849999553,
+        "p95": 90.38104640007987,
+        "p99": 98.14924558973416,
+        "mean": 71.97910330257506,
+        "max": 161.7571440001484
+      }
+    }
+  },
+  "resource": {
+    "cpu_util_avg": 47.56464722572949,
+    "cpu_util_p95": 49.7695302218608,
+    "orch_cpu_util_avg": 0.05295343137254902,
+    "orch_cpu_util_p95": 0.06874999999999999,
+    "mem_peak_gb": 16.56230926513672,
+    "ctx_switch_per_sec_avg": 228372.19675697552,
+    "host_ncpu": 96,
+    "control_plane": {
+      "cgroups": {
+        "cube_api": "/sys/fs/cgroup/system.slice/cube-sandbox-cube-api.service",
+        "cube_master": "/sys/fs/cgroup/system.slice/cube-sandbox-cubemaster.service",
+        "cubelet": "/sys/fs/cgroup/cube_sandbox/cubelet",
+        "cube_ops": "/sys/fs/cgroup/system.slice/cube-sandbox-cubeops.service",
+        "template_center": "/sys/fs/cgroup/system.slice/cube-sandbox-cube-templatecenter.service",
+        "cube_proxy": "/sys/fs/cgroup/system.slice/docker-533c377724b4d74cfbc5040f5a5f2a38fe05f8a1d15773efab8eb43eb1d76641.scope",
+        "sandbox_fleet": "/sys/fs/cgroup/cube_sandbox/sandbox,/sys/fs/cgroup/cube_sandbox_v2/sandbox"
+      },
+      "cube_api_cores_avg": 0.029106969464013588,
+      "cube_api_cores_p95": 0.0335345553007601,
+      "cube_master_cores_avg": 0.2776849291201411,
+      "cube_master_cores_p95": 0.3574752154775098,
+      "cubelet_cores_avg": 2.193667567706348,
+      "cubelet_cores_p95": 2.6154074474558096,
+      "cube_ops_cores_avg": 0.0038692520873745678,
+      "cube_ops_cores_p95": 0.009332304119739234,
+      "template_center_cores_avg": 0.0028324726216831762,
+      "template_center_cores_p95": 0.003383611686547108,
+      "cube_proxy_cores_avg": 0.34420543572052165,
+      "cube_proxy_cores_p95": 0.39986201153395423,
+      "sandbox_fleet_cores_avg": 26.781433972058252,
+      "sandbox_fleet_cores_p95": 28.637041634893073,
+      "sandbox_fleet_mem_gb_max": 7.564308166503906,
+      "cubelet_mem_gb_max": 19.387584686279297,
+      "control_plane_cores_p95": 3.415611533887773,
+      "sandbox_shims_max": 32,
+      "sandbox_shims_avg": 28.294117647058822,
+      "node_id": "172.31.79.253",
+      "node_healthy": true,
+      "node_unhealthy_reason": null,
+      "node_instance_type": "cubebox",
+      "max_sandboxes": 471,
+      "sandbox_count_max": 32,
+      "sandbox_count_avg": 30.647058823529413,
+      "allocated_cpu_milli_max": 64000,
+      "allocated_cpu_milli_avg": 61294.117647058825,
+      "allocated_mem_mb_max": 32768,
+      "allocated_mem_mb_avg": 31382.58823529412,
+      "creates_in_flight_max": 0,
+      "creates_in_flight_avg": 0.0,
+      "allocated_mem_gb_max": 32.0,
+      "create_fails": 0,
+      "control_plane_host_share_p95": 0.0356,
+      "cube_proxy_host_share_p95": 0.0042,
+      "node_at_sandbox_capacity": false,
+      "control_plane_saturated": false
+    },
+    "disk": {
+      "devices": [
+        "nvme0n1",
+        "nvme1n1"
+      ],
+      "read_mbps_avg": 0.5099208404481447,
+      "write_mbps_avg": 14.303427341169778,
+      "write_mbps_p95": 51.78439645726437,
+      "iops_avg": 797.2597392929574,
+      "iops_p95": 1124.998907546305,
+      "util_avg": 0.49686137669076363,
+      "util_p95": 0.5705573531280814,
+      "await_ms_avg": 0.9791055873998845,
+      "await_ms_p95": 1.268053893276279,
+      "queue_depth_avg": 0.7953217380922507,
+      "queue_depth_p95": 1.4385312206905663,
+      "disk_saturated": false,
+      "disk_pressure": false
+    }
+  },
+  "cost": {
+    "instance_hourly_usd": 4.284,
+    "cost_per_1k_units_usd": 0.0011314655172413792,
+    "cost_per_1m_units_usd": 1.1314655172413792
+  },
+  "extra": {
+    "corpus_size": 591,
+    "corpus_breakdown": {
+      "humaneval": 164,
+      "mbpp_sanitized": 427,
+      "fallback": 0
+    },
+    "snippet_timeout_sec": 10,
+    "episode_steps": 32,
+    "pass_rate": 0.9838,
+    "sandbox": {
+      "strategy": "fresh",
+      "transport": "cubeproxy/path",
+      "one_sandbox_per_rollout": true,
+      "state_reset_between_rollouts": true,
+      "sandbox_timeout_sec": 3600,
+      "provisioning_share_p50": 0.1858,
+      "think_time_ms": 0.0,
+      "think_time_pause": false
+    },
+    "load_gen": {
+      "nprocs": 32,
+      "concurrency_per_proc": [
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1
+      ]
+    }
+  },
+  "timestamp": "20260929-005540"
+}

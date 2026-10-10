@@ -1,0 +1,210 @@
+{
+  "benchmark": "B8",
+  "instance": {
+    "instance_type": "m8g.metal-48xl",
+    "instance_id": "i-06b874dc2ce206944",
+    "region": "us-east-1",
+    "az": "us-east-1c",
+    "arch": "aarch64",
+    "kernel": "7.0.0-1012-aws",
+    "cpu_model": "0xd4f",
+    "vcpus": 192,
+    "physical_cores": 192,
+    "threads_per_core": 1.0,
+    "smt": false
+  },
+  "concurrency": 32,
+  "duration_sec": 54.279369197982305,
+  "throughput": {
+    "sandbox_creates_per_sec": 388.73401684968445,
+    "total_creates": 500,
+    "total_clones": 62,
+    "total_clone_children": 496,
+    "total_rollbacks": 62
+  },
+  "latency_ms": {
+    "count": 500,
+    "errors": 0,
+    "p50": 82.31849700041494,
+    "p95": 242.42097445039687,
+    "p99": 305.9987461804848,
+    "mean": 108.55873839596461,
+    "max": 336.70918099960545,
+    "phases": {
+      "create": {
+        "count": 500,
+        "errors": 0,
+        "p50": 82.31849700041494,
+        "p95": 242.42097445039687,
+        "p99": 305.9987461804848,
+        "mean": 108.55873839596461,
+        "max": 336.70918099960545
+      },
+      "delete": {
+        "count": 500,
+        "errors": 0,
+        "p50": 257.01628549904854,
+        "p95": 430.8136140009992,
+        "p99": 507.86430089012356,
+        "mean": 265.7392738739763,
+        "max": 612.3345069991046
+      },
+      "pause": {
+        "count": 500,
+        "errors": 0,
+        "p50": 186.5380630006257,
+        "p95": 330.73135935046594,
+        "p99": 398.627151949422,
+        "mean": 204.7901510400079,
+        "max": 458.977958000105
+      },
+      "resume": {
+        "count": 500,
+        "errors": 0,
+        "p50": 950.3208154992535,
+        "p95": 1176.3127795507899,
+        "p99": 1205.2343729917084,
+        "mean": 958.3970289480094,
+        "max": 1230.2602290001232
+      },
+      "snapshot": {
+        "count": 62,
+        "errors": 0,
+        "p50": 152.8952174994629,
+        "p95": 169.9746278502971,
+        "p99": 233.6832300003335,
+        "mean": 153.76183730645167,
+        "max": 323.5434889993485
+      },
+      "clone_fanout": {
+        "count": 62,
+        "errors": 0,
+        "p50": 818.965813999057,
+        "p95": 830.2431453004829,
+        "p99": 968.3083577099569,
+        "mean": 818.8449005967354,
+        "max": 998.8349470004323
+      },
+      "clone_per_child": {
+        "count": 62,
+        "errors": 0,
+        "p50": 102.37072674988212,
+        "p95": 103.78039316256036,
+        "p99": 121.03854471374461,
+        "mean": 102.35561257459193,
+        "max": 124.85436837505404
+      },
+      "rollback": {
+        "count": 62,
+        "errors": 0,
+        "p50": 81.66791549956542,
+        "p95": 96.54791065067911,
+        "p99": 214.22331101057352,
+        "mean": 85.51362348378227,
+        "max": 219.31715200116741
+      }
+    }
+  },
+  "resource": {
+    "cpu_util_avg": 1.7430692969971853,
+    "cpu_util_p95": 4.586604813855166,
+    "orch_cpu_util_avg": 0.09456758720930235,
+    "orch_cpu_util_p95": 0.11497395833333333,
+    "mem_peak_gb": 27.827587127685547,
+    "ctx_switch_per_sec_avg": 119410.05881854732,
+    "host_ncpu": 192,
+    "control_plane": {
+      "cgroups": {
+        "cube_api": "/sys/fs/cgroup/system.slice/cube-sandbox-cube-api.service",
+        "cube_master": "/sys/fs/cgroup/system.slice/cube-sandbox-cubemaster.service",
+        "cubelet": "/sys/fs/cgroup/cube_sandbox/cubelet",
+        "cube_ops": "/sys/fs/cgroup/system.slice/cube-sandbox-cubeops.service",
+        "template_center": "/sys/fs/cgroup/system.slice/cube-sandbox-cube-templatecenter.service",
+        "cube_proxy": "/sys/fs/cgroup/system.slice/docker-affd49be9dca7c5d1beace1885ddbd1112595606e4369ca9d4812b382979fae7.scope",
+        "sandbox_fleet": "/sys/fs/cgroup/cube_sandbox/sandbox,/sys/fs/cgroup/cube_sandbox_v2/sandbox"
+      },
+      "cube_api_cores_avg": 0.007769809980400087,
+      "cube_api_cores_p95": 0.022981924780794128,
+      "cube_master_cores_avg": 0.47332217240754576,
+      "cube_master_cores_p95": 1.2657659894597568,
+      "cubelet_cores_avg": 1.5279035697670182,
+      "cubelet_cores_p95": 4.543962595044879,
+      "cube_ops_cores_avg": 0.0049231749083096295,
+      "cube_ops_cores_p95": 0.015131323665941426,
+      "template_center_cores_avg": 0.0017018040203081034,
+      "template_center_cores_p95": 0.00232612928895935,
+      "cube_proxy_cores_avg": 0.04721591662777949,
+      "cube_proxy_cores_p95": 0.028509875453676774,
+      "sandbox_fleet_cores_avg": 0.6540458725967552,
+      "sandbox_fleet_cores_p95": 1.903305135460509,
+      "sandbox_fleet_mem_gb_max": 15.99222183227539,
+      "cubelet_mem_gb_max": 45.374114990234375,
+      "control_plane_cores_p95": 5.876351708405048,
+      "sandbox_shims_max": 32,
+      "sandbox_shims_avg": 12.186046511627907,
+      "node_id": "172.31.87.217",
+      "node_healthy": true,
+      "node_unhealthy_reason": null,
+      "node_instance_type": "cubebox",
+      "max_sandboxes": 1885,
+      "sandbox_count_max": 32,
+      "sandbox_count_avg": 11.166666666666666,
+      "allocated_cpu_milli_max": 64000,
+      "allocated_cpu_milli_avg": 22333.333333333332,
+      "allocated_mem_mb_max": 32768,
+      "allocated_mem_mb_avg": 11434.666666666666,
+      "creates_in_flight_max": 0,
+      "creates_in_flight_avg": 0.0,
+      "allocated_mem_gb_max": 32.0,
+      "create_fails": 0,
+      "control_plane_host_share_p95": 0.0306,
+      "cube_proxy_host_share_p95": 0.0001,
+      "node_at_sandbox_capacity": false,
+      "control_plane_saturated": false
+    },
+    "disk": {
+      "devices": [
+        "nvme0n1",
+        "nvme1n1"
+      ],
+      "read_mbps_avg": 290.18999229345474,
+      "write_mbps_avg": 14.984205328336945,
+      "write_mbps_p95": 29.687679876445504,
+      "iops_avg": 10261.304176618774,
+      "iops_p95": 30258.486102935698,
+      "util_avg": 0.4542383955841429,
+      "util_p95": 0.9990249120709489,
+      "await_ms_avg": 0.8728121356609023,
+      "await_ms_p95": 1.862593932537827,
+      "queue_depth_avg": 12.61910232213598,
+      "queue_depth_p95": 54.534771406789936,
+      "disk_saturated": false,
+      "disk_pressure": true
+    }
+  },
+  "cost": {
+    "instance_hourly_usd": 8.61696,
+    "cost_per_1k_units_usd": null,
+    "cost_per_1m_units_usd": null
+  },
+  "extra": {
+    "trials": 500,
+    "clone_children_per_call": 8,
+    "clone_batches": 62,
+    "template": "tpl-282d4df37b55450790c4df41",
+    "transport": "cubeproxy/path",
+    "phases_measured": [
+      "clone_fanout",
+      "clone_per_child",
+      "create",
+      "delete",
+      "pause",
+      "resume",
+      "rollback",
+      "snapshot"
+    ],
+    "clone_is_server_side_fanout": false,
+    "cold_start_measured": false
+  },
+  "timestamp": "20260911-135023"
+}

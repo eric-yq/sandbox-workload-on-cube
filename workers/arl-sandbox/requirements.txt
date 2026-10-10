@@ -1,0 +1,4 @@
+fastapi==0.115.4
+uvicorn[standard]==0.32.0
+playwright==1.48.0
+duckdb==1.1.3

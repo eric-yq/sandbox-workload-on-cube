@@ -1,0 +1,210 @@
+{
+  "benchmark": "B3",
+  "instance": {
+    "instance_type": "c7i.metal-24xl",
+    "instance_id": "i-06315c5a71102e2d0",
+    "region": "us-east-1",
+    "az": "us-east-1f",
+    "arch": "x86_64",
+    "kernel": "7.0.0-1013-aws",
+    "cpu_model": "Intel(R) Xeon(R) Platinum 8488C",
+    "vcpus": 96,
+    "physical_cores": 48,
+    "threads_per_core": 2.0,
+    "smt": true
+  },
+  "concurrency": 32,
+  "duration_sec": 60,
+  "throughput": {
+    "trajectories_per_sec": 164.68333333333334,
+    "tool_calls_per_sec": 1931.4666666666667,
+    "total_trajectories": 9881,
+    "total_tool_calls": 115888
+  },
+  "latency_ms": {
+    "trajectory": {
+      "count": 9881,
+      "errors": 0,
+      "p50": 192.1821700000237,
+      "p95": 228.7794420001319,
+      "p99": 254.2101490001187,
+      "mean": 194.93263259214373,
+      "max": 319.65871300008075
+    },
+    "sandbox": {
+      "sandbox_create": {
+        "count": 9881,
+        "p50": 82.22488100000191,
+        "p95": 98.88732400008848,
+        "p99": 112.67568979997127,
+        "mean": 83.84394664629258,
+        "max": 225.0819070000034
+      },
+      "steps": {
+        "count": 9881,
+        "p50": 24.531253000077413,
+        "p95": 37.34991000010268,
+        "p99": 40.93441039995016,
+        "mean": 25.810088393380035,
+        "max": 61.890642999969714
+      },
+      "sandbox_release": {
+        "count": 9881,
+        "p50": 83.34172100012438,
+        "p95": 109.11378299988428,
+        "p99": 132.42685659993188,
+        "mean": 85.26777835310256,
+        "max": 199.9809879998793
+      }
+    }
+  },
+  "resource": {
+    "cpu_util_avg": 34.00262905892456,
+    "cpu_util_p95": 35.12743139000705,
+    "orch_cpu_util_avg": 0.05495248538011696,
+    "orch_cpu_util_p95": 0.059375000000000004,
+    "mem_peak_gb": 16.244823455810547,
+    "ctx_switch_per_sec_avg": 696800.7113426011,
+    "host_ncpu": 96,
+    "control_plane": {
+      "cgroups": {
+        "cube_api": "/sys/fs/cgroup/system.slice/cube-sandbox-cube-api.service",
+        "cube_master": "/sys/fs/cgroup/system.slice/cube-sandbox-cubemaster.service",
+        "cubelet": "/sys/fs/cgroup/cube_sandbox/cubelet",
+        "cube_ops": "/sys/fs/cgroup/system.slice/cube-sandbox-cubeops.service",
+        "template_center": "/sys/fs/cgroup/system.slice/cube-sandbox-cube-templatecenter.service",
+        "cube_proxy": "/sys/fs/cgroup/system.slice/docker-533c377724b4d74cfbc5040f5a5f2a38fe05f8a1d15773efab8eb43eb1d76641.scope",
+        "sandbox_fleet": "/sys/fs/cgroup/cube_sandbox/sandbox,/sys/fs/cgroup/cube_sandbox_v2/sandbox"
+      },
+      "cube_api_cores_avg": 0.10195816027432739,
+      "cube_api_cores_p95": 0.1073603183906921,
+      "cube_master_cores_avg": 1.1583321940670472,
+      "cube_master_cores_p95": 1.2410476158196768,
+      "cubelet_cores_avg": 10.110690431803272,
+      "cubelet_cores_p95": 10.50526791373346,
+      "cube_ops_cores_avg": 0.003964692706523726,
+      "cube_ops_cores_p95": 0.010773485933656873,
+      "template_center_cores_avg": 0.0027962059909396857,
+      "template_center_cores_p95": 0.0032026365310124476,
+      "cube_proxy_cores_avg": 0.5288743759565633,
+      "cube_proxy_cores_p95": 0.5556835665036078,
+      "sandbox_fleet_cores_avg": 9.196729392313394,
+      "sandbox_fleet_cores_p95": 9.627167615812462,
+      "sandbox_fleet_mem_gb_max": 6.464057922363281,
+      "cubelet_mem_gb_max": 16.66867446899414,
+      "control_plane_cores_p95": 12.420132900381095,
+      "sandbox_shims_max": 30,
+      "sandbox_shims_avg": 19.614035087719298,
+      "node_id": "172.31.79.253",
+      "node_healthy": true,
+      "node_unhealthy_reason": null,
+      "node_instance_type": "cubebox",
+      "max_sandboxes": 471,
+      "sandbox_count_max": 31,
+      "sandbox_count_avg": 27.083333333333332,
+      "allocated_cpu_milli_max": 62000,
+      "allocated_cpu_milli_avg": 54166.666666666664,
+      "allocated_mem_mb_max": 31744,
+      "allocated_mem_mb_avg": 27733.333333333332,
+      "creates_in_flight_max": 0,
+      "creates_in_flight_avg": 0.0,
+      "allocated_mem_gb_max": 31.0,
+      "create_fails": 0,
+      "control_plane_host_share_p95": 0.1294,
+      "cube_proxy_host_share_p95": 0.0058,
+      "node_at_sandbox_capacity": false,
+      "control_plane_saturated": false
+    },
+    "disk": {
+      "devices": [
+        "nvme0n1",
+        "nvme1n1"
+      ],
+      "read_mbps_avg": 2.690658586427268,
+      "write_mbps_avg": 45.83748646752329,
+      "write_mbps_p95": 122.24411134555912,
+      "iops_avg": 2143.8506752282738,
+      "iops_p95": 3372.384559937547,
+      "util_avg": 0.8827366217970211,
+      "util_p95": 0.918853099604987,
+      "await_ms_avg": 1.001750168117524,
+      "await_ms_p95": 1.4332868955288016,
+      "queue_depth_avg": 2.210298579153143,
+      "queue_depth_p95": 5.184174638041256,
+      "disk_saturated": false,
+      "disk_pressure": false
+    }
+  },
+  "cost": {
+    "instance_hourly_usd": 4.284,
+    "cost_per_1k_units_usd": 0.007225989272340855,
+    "cost_per_1m_units_usd": 7.225989272340855
+  },
+  "extra": {
+    "trajectory_pool_size": 200,
+    "trajectory_breakdown": {
+      "templates": {
+        "browse_only": 40,
+        "buy_simple": 50,
+        "buy_with_compare": 30,
+        "refund_flow": 20,
+        "inventory_heavy": 20,
+        "checkout_loop": 20,
+        "profile_admin": 20
+      },
+      "total": 200,
+      "avg_steps": 11.7,
+      "seed": 42
+    },
+    "avg_steps_per_trajectory": 11.7,
+    "per_rollout_state_isolation": true,
+    "sandbox": {
+      "strategy": "fresh",
+      "transport": "cubeproxy/path",
+      "one_sandbox_per_rollout": true,
+      "state_reset_between_rollouts": true,
+      "sandbox_timeout_sec": 3600,
+      "provisioning_share_p50": 0.8615,
+      "think_time_ms": 0.0,
+      "think_time_pause": false
+    },
+    "load_gen": {
+      "nprocs": 32,
+      "concurrency_per_proc": [
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1
+      ]
+    }
+  },
+  "timestamp": "20260929-003434"
+}

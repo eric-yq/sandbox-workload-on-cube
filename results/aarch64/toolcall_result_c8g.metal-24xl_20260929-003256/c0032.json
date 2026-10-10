@@ -1,0 +1,210 @@
+{
+  "benchmark": "B3",
+  "instance": {
+    "instance_type": "c8g.metal-24xl",
+    "instance_id": "i-0cf3510ada1db52a4",
+    "region": "us-east-1",
+    "az": "us-east-1b",
+    "arch": "aarch64",
+    "kernel": "7.0.0-1013-aws",
+    "cpu_model": "0xd4f",
+    "vcpus": 96,
+    "physical_cores": 96,
+    "threads_per_core": 1.0,
+    "smt": false
+  },
+  "concurrency": 32,
+  "duration_sec": 60,
+  "throughput": {
+    "trajectories_per_sec": 162.06666666666666,
+    "tool_calls_per_sec": 1901.7666666666667,
+    "total_trajectories": 9724,
+    "total_tool_calls": 114106
+  },
+  "latency_ms": {
+    "trajectory": {
+      "count": 9724,
+      "errors": 0,
+      "p50": 194.03933550006514,
+      "p95": 238.7613247499644,
+      "p99": 272.9455117698219,
+      "mean": 198.17314644724223,
+      "max": 421.21133799992094
+    },
+    "sandbox": {
+      "sandbox_create": {
+        "count": 9724,
+        "p50": 90.84413299979133,
+        "p95": 113.54662974972598,
+        "p99": 124.5585708699946,
+        "mean": 92.52309059625433,
+        "max": 274.2122169997856
+      },
+      "steps": {
+        "count": 9724,
+        "p50": 22.489658000040436,
+        "p95": 34.19828134990439,
+        "p99": 39.41627101993847,
+        "mean": 23.24810590539118,
+        "max": 56.89690600001995
+      },
+      "sandbox_release": {
+        "count": 9724,
+        "p50": 78.2075670000495,
+        "p95": 118.14274585005937,
+        "p99": 174.77904754016663,
+        "mean": 82.39289849372598,
+        "max": 278.65572299970154
+      }
+    }
+  },
+  "resource": {
+    "cpu_util_avg": 37.33565444259737,
+    "cpu_util_p95": 38.80010429731172,
+    "orch_cpu_util_avg": 0.08906250000000002,
+    "orch_cpu_util_p95": 0.08880208333333334,
+    "mem_peak_gb": 14.982780456542969,
+    "ctx_switch_per_sec_avg": 987288.4242172986,
+    "host_ncpu": 96,
+    "control_plane": {
+      "cgroups": {
+        "cube_api": "/sys/fs/cgroup/system.slice/cube-sandbox-cube-api.service",
+        "cube_master": "/sys/fs/cgroup/system.slice/cube-sandbox-cubemaster.service",
+        "cubelet": "/sys/fs/cgroup/cube_sandbox/cubelet",
+        "cube_ops": "/sys/fs/cgroup/system.slice/cube-sandbox-cubeops.service",
+        "template_center": "/sys/fs/cgroup/system.slice/cube-sandbox-cube-templatecenter.service",
+        "cube_proxy": "/sys/fs/cgroup/system.slice/docker-54e6b7cc1e2b8ddafe96bac5a9fc02c0e78b622466d0184aa3aa8035a99cb9b4.scope",
+        "sandbox_fleet": "/sys/fs/cgroup/cube_sandbox/sandbox,/sys/fs/cgroup/cube_sandbox_v2/sandbox"
+      },
+      "cube_api_cores_avg": 0.0846597704059263,
+      "cube_api_cores_p95": 0.08961800580087398,
+      "cube_master_cores_avg": 1.1046528248084764,
+      "cube_master_cores_p95": 1.3576404900602719,
+      "cubelet_cores_avg": 13.19987139593859,
+      "cubelet_cores_p95": 14.30332211689226,
+      "cube_ops_cores_avg": 0.0029244289971616893,
+      "cube_ops_cores_p95": 0.005226867235294664,
+      "template_center_cores_avg": 0.0022552185146770807,
+      "template_center_cores_p95": 0.0026824091055619595,
+      "cube_proxy_cores_avg": 0.4479709144089949,
+      "cube_proxy_cores_p95": 0.4791184342929312,
+      "sandbox_fleet_cores_avg": 11.986237666664449,
+      "sandbox_fleet_cores_p95": 12.530374827932704,
+      "sandbox_fleet_mem_gb_max": 7.082920074462891,
+      "cubelet_mem_gb_max": 20.758007049560547,
+      "control_plane_cores_p95": 16.234925914281632,
+      "sandbox_shims_max": 24,
+      "sandbox_shims_avg": 14.035714285714286,
+      "node_id": "172.31.6.76",
+      "node_healthy": true,
+      "node_unhealthy_reason": null,
+      "node_instance_type": "cubebox",
+      "max_sandboxes": 470,
+      "sandbox_count_max": 31,
+      "sandbox_count_avg": 27.454545454545453,
+      "allocated_cpu_milli_max": 62000,
+      "allocated_cpu_milli_avg": 54727.27272727273,
+      "allocated_mem_mb_max": 31744,
+      "allocated_mem_mb_avg": 28020.363636363636,
+      "creates_in_flight_max": 0,
+      "creates_in_flight_avg": 0.0,
+      "allocated_mem_gb_max": 31.0,
+      "create_fails": 0,
+      "control_plane_host_share_p95": 0.1691,
+      "cube_proxy_host_share_p95": 0.005,
+      "node_at_sandbox_capacity": false,
+      "control_plane_saturated": false
+    },
+    "disk": {
+      "devices": [
+        "nvme0n1",
+        "nvme1n1"
+      ],
+      "read_mbps_avg": 2.6317956440092365,
+      "write_mbps_avg": 44.48371979198522,
+      "write_mbps_p95": 105.34750403653086,
+      "iops_avg": 2126.0987101300198,
+      "iops_p95": 2546.5960010128183,
+      "util_avg": 0.8838071424935077,
+      "util_p95": 0.9182741600644986,
+      "await_ms_avg": 1.0324391360784035,
+      "await_ms_p95": 1.3271148412766467,
+      "queue_depth_avg": 2.243434988195154,
+      "queue_depth_p95": 4.209391964638841,
+      "disk_saturated": false,
+      "disk_pressure": false
+    }
+  },
+  "cost": {
+    "instance_hourly_usd": 3.82848,
+    "cost_per_1k_units_usd": 0.006561908679555739,
+    "cost_per_1m_units_usd": 6.561908679555739
+  },
+  "extra": {
+    "trajectory_pool_size": 200,
+    "trajectory_breakdown": {
+      "templates": {
+        "browse_only": 40,
+        "buy_simple": 50,
+        "buy_with_compare": 30,
+        "refund_flow": 20,
+        "inventory_heavy": 20,
+        "checkout_loop": 20,
+        "profile_admin": 20
+      },
+      "total": 200,
+      "avg_steps": 11.7,
+      "seed": 42
+    },
+    "avg_steps_per_trajectory": 11.7,
+    "per_rollout_state_isolation": true,
+    "sandbox": {
+      "strategy": "fresh",
+      "transport": "cubeproxy/path",
+      "one_sandbox_per_rollout": true,
+      "state_reset_between_rollouts": true,
+      "sandbox_timeout_sec": 3600,
+      "provisioning_share_p50": 0.8712,
+      "think_time_ms": 0.0,
+      "think_time_pause": false
+    },
+    "load_gen": {
+      "nprocs": 32,
+      "concurrency_per_proc": [
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1
+      ]
+    }
+  },
+  "timestamp": "20260929-003412"
+}

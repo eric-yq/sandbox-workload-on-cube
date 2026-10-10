@@ -1,0 +1,214 @@
+{
+  "benchmark": "B4",
+  "instance": {
+    "instance_type": "c7i.metal-24xl",
+    "instance_id": "i-06315c5a71102e2d0",
+    "region": "us-east-1",
+    "az": "us-east-1f",
+    "arch": "x86_64",
+    "kernel": "7.0.0-1013-aws",
+    "cpu_model": "Intel(R) Xeon(R) Platinum 8488C",
+    "vcpus": 96,
+    "physical_cores": 48,
+    "threads_per_core": 2.0,
+    "smt": true
+  },
+  "concurrency": 32,
+  "duration_sec": 60,
+  "throughput": {
+    "trajectories_per_sec": 25.516666666666666,
+    "actions_per_sec": 292.03333333333336,
+    "total_trajectories": 1531,
+    "total_actions": 17522
+  },
+  "latency_ms": {
+    "trajectory": {
+      "count": 1531,
+      "errors": 0,
+      "p50": 926.6968510000879,
+      "p95": 2994.259616999898,
+      "p99": 3439.9409263998223,
+      "mean": 1283.1209849843228,
+      "max": 3486.401551000199
+    },
+    "sandbox": {
+      "sandbox_create": {
+        "count": 1531,
+        "p50": 85.28629700003876,
+        "p95": 95.21489150006346,
+        "p99": 100.29354009993769,
+        "mean": 86.17329123449764,
+        "max": 121.24207999977443
+      },
+      "steps": {
+        "count": 1531,
+        "p50": 718.3075820003069,
+        "p95": 2790.159623999898,
+        "p99": 3242.276513300203,
+        "mean": 1079.533022251474,
+        "max": 3292.077233999862
+      },
+      "sandbox_release": {
+        "count": 1531,
+        "p50": 116.35964300012347,
+        "p95": 138.20159600027182,
+        "p99": 146.21562129973427,
+        "mean": 117.38853543696663,
+        "max": 167.70955600031812
+      }
+    }
+  },
+  "resource": {
+    "cpu_util_avg": 36.99395887833642,
+    "cpu_util_p95": 42.59437490819678,
+    "orch_cpu_util_avg": 0.054149305555555555,
+    "orch_cpu_util_p95": 0.06874999999999999,
+    "mem_peak_gb": 20.144245147705078,
+    "ctx_switch_per_sec_avg": 150692.32892884235,
+    "host_ncpu": 96,
+    "control_plane": {
+      "cgroups": {
+        "cube_api": "/sys/fs/cgroup/system.slice/cube-sandbox-cube-api.service",
+        "cube_master": "/sys/fs/cgroup/system.slice/cube-sandbox-cubemaster.service",
+        "cubelet": "/sys/fs/cgroup/cube_sandbox/cubelet",
+        "cube_ops": "/sys/fs/cgroup/system.slice/cube-sandbox-cubeops.service",
+        "template_center": "/sys/fs/cgroup/system.slice/cube-sandbox-cube-templatecenter.service",
+        "cube_proxy": "/sys/fs/cgroup/system.slice/docker-533c377724b4d74cfbc5040f5a5f2a38fe05f8a1d15773efab8eb43eb1d76641.scope",
+        "sandbox_fleet": "/sys/fs/cgroup/cube_sandbox/sandbox,/sys/fs/cgroup/cube_sandbox_v2/sandbox"
+      },
+      "cube_api_cores_avg": 0.02214893739441396,
+      "cube_api_cores_p95": 0.026318407100967726,
+      "cube_master_cores_avg": 0.2126734729009789,
+      "cube_master_cores_p95": 0.25659448847204513,
+      "cubelet_cores_avg": 1.8147169294115992,
+      "cubelet_cores_p95": 2.3152486036187137,
+      "cube_ops_cores_avg": 0.003834444799485218,
+      "cube_ops_cores_p95": 0.009208157789393878,
+      "template_center_cores_avg": 0.0028660762935615635,
+      "template_center_cores_p95": 0.003213294233361991,
+      "cube_proxy_cores_avg": 0.11549590314613686,
+      "cube_proxy_cores_p95": 1.0349889849318743,
+      "sandbox_fleet_cores_avg": 21.35360326091648,
+      "sandbox_fleet_cores_p95": 25.05881691475698,
+      "sandbox_fleet_mem_gb_max": 8.854480743408203,
+      "cubelet_mem_gb_max": 19.249923706054688,
+      "control_plane_cores_p95": 3.6423586419129945,
+      "sandbox_shims_max": 32,
+      "sandbox_shims_avg": 28.75,
+      "node_id": "172.31.79.253",
+      "node_healthy": true,
+      "node_unhealthy_reason": null,
+      "node_instance_type": "cubebox",
+      "max_sandboxes": 471,
+      "sandbox_count_max": 32,
+      "sandbox_count_avg": 31.333333333333332,
+      "allocated_cpu_milli_max": 64000,
+      "allocated_cpu_milli_avg": 62666.666666666664,
+      "allocated_mem_mb_max": 65536,
+      "allocated_mem_mb_avg": 64170.666666666664,
+      "creates_in_flight_max": 0,
+      "creates_in_flight_avg": 0.0,
+      "allocated_mem_gb_max": 64.0,
+      "create_fails": 0,
+      "control_plane_host_share_p95": 0.0379,
+      "cube_proxy_host_share_p95": 0.0108,
+      "node_at_sandbox_capacity": false,
+      "control_plane_saturated": false
+    },
+    "disk": {
+      "devices": [
+        "nvme0n1",
+        "nvme1n1"
+      ],
+      "read_mbps_avg": 0.39150376054132285,
+      "write_mbps_avg": 14.585109986980473,
+      "write_mbps_p95": 43.6266371775807,
+      "iops_avg": 755.6199442563105,
+      "iops_p95": 975.9874131032481,
+      "util_avg": 0.44788488945922683,
+      "util_p95": 0.5232430476153936,
+      "await_ms_avg": 0.9850876066605773,
+      "await_ms_p95": 1.2525712240627997,
+      "queue_depth_avg": 0.7580799110195428,
+      "queue_depth_p95": 1.2032965706921277,
+      "disk_saturated": false,
+      "disk_pressure": false
+    }
+  },
+  "cost": {
+    "instance_hourly_usd": 4.284,
+    "cost_per_1k_units_usd": 0.04663618549967341,
+    "cost_per_1m_units_usd": 46.63618549967341
+  },
+  "extra": {
+    "trajectory_pool_size": 80,
+    "trajectory_breakdown": {
+      "templates": {
+        "browse_only": 20,
+        "search_filter": 16,
+        "add_to_cart": 12,
+        "checkout_flow": 8,
+        "product_compare": 8,
+        "paginate_scroll": 6,
+        "screenshot_heavy": 5,
+        "profile_update": 5
+      },
+      "total": 80,
+      "avg_steps": 11.38,
+      "seed": 42
+    },
+    "selector_miss_rate": 0.0865,
+    "steps_done_total": 16007,
+    "steps_failed_total": 1515,
+    "target_url": "http://127.0.0.1:80",
+    "spa_colocated_in_sandbox": true,
+    "sandbox": {
+      "strategy": "fresh",
+      "transport": "cubeproxy/path",
+      "one_sandbox_per_rollout": true,
+      "state_reset_between_rollouts": true,
+      "sandbox_timeout_sec": 3600,
+      "provisioning_share_p50": 0.2176,
+      "think_time_ms": 0.0,
+      "think_time_pause": false
+    },
+    "load_gen": {
+      "nprocs": 32,
+      "concurrency_per_proc": [
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1
+      ]
+    }
+  },
+  "timestamp": "20260929-004023"
+}

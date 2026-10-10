@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Product detail</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<nav>
+  <a href="/">Home</a>
+  <a href="/cart.html">Cart</a>
+  <a href="/orders.html">Orders</a>
+  <a href="/profile.html">Profile</a>
+</nav>
+
+<main>
+  <a class="back-link" href="/">&laquo; back</a>
+  <article id="product-detail" class="product-detail">loading...</article>
+  <section class="reviews">
+    <h2>Reviews</h2>
+    <ul id="reviews"></ul>
+  </section>
+  <section class="recommend">
+    <h2>You may also like</h2>
+    <div id="recommend-grid" class="grid grid-small"></div>
+  </section>
+</main>
+
+<script src="/data.js"></script>
+<script src="/app.js"></script>
+<script>
+  Shop.boot({ container: 'recommend-grid', mode: 'product', pageSize: 6 });
+</script>
+</body>
+</html>
