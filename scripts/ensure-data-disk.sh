@@ -219,10 +219,15 @@ fi
 if ! have_cmd mkfs.xfs || ! have_cmd xfs_info; then
   log "installing xfsprogs"
   if have_cmd apt-get; then
-    # apt_get waits out a first-boot dpkg lock; on a fresh instance this
-    # would otherwise fail and strand the whole run at step 2.
-    run apt_get update -qq
-    run env DEBIAN_FRONTEND=noninteractive apt_get install -y -qq xfsprogs
+    # apt_get waits out a first-boot dpkg lock, sets DEBIAN_FRONTEND and
+    # keeps a successful install quiet; on a fresh instance a held lock
+    # would otherwise strand the whole run here at step 2.
+    #
+    # Note there is no `env DEBIAN_FRONTEND=... apt_get ...` here: apt_get
+    # is a shell function, and `env` execs a binary, so wrapping it that
+    # way fails with "env: 'apt_get': No such file or directory".
+    run apt_get update
+    run apt_get install -y xfsprogs
   elif have_cmd dnf; then
     run dnf install -y xfsprogs
   else

@@ -171,8 +171,28 @@ apt_wait_ready() {
   fi
 }
 
+# Quiet on success, complete on failure - see the same reasoning in
+# scripts/_lib.sh. Installing Docker is the noisiest thing setup-host.sh
+# does, and none of it is worth reading unless it breaks.
+#
+# DEBIAN_FRONTEND is set here, not at the call sites, so no package can
+# stop on a debconf prompt. In a non-interactive setup run that is not a
+# prompt, it is a hang with no output.
 apt_priv() {
-  run_priv apt-get -o DPkg::Lock::Timeout="${APT_LOCK_WAIT}" "$@"
+  local log rc
+  log="$(mktemp)"
+  if run_priv env DEBIAN_FRONTEND=noninteractive \
+       apt-get -o DPkg::Lock::Timeout="${APT_LOCK_WAIT}" -qq "$@" \
+       >"${log}" 2>&1; then
+    rc=0
+    [[ -s "${log}" ]] && sed 's/^/    /' "${log}"
+  else
+    rc=$?
+    err "apt-get $* failed (exit ${rc}). Full output:"
+    sed 's/^/    /' "${log}" >&2
+  fi
+  rm -f "${log}"
+  return "${rc}"
 }
 
 install_debian_family() {
@@ -196,6 +216,10 @@ https://download.docker.com/linux/${OS_ID} ${codename} stable" \
     | run_priv tee /etc/apt/sources.list.d/docker.list >/dev/null
 
   apt_priv update -y
+  # Announced because it is now quiet and takes a few minutes: silence with
+  # no explanation is indistinguishable from a hang, and on these hosts a
+  # real hang is a thing that happens.
+  log "installing docker-ce (quiet; this takes a few minutes)"
   apt_priv install -y docker-ce docker-ce-cli containerd.io \
     docker-buildx-plugin
 }

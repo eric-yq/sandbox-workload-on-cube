@@ -84,10 +84,13 @@ ensure_venv_support() {
     local pyver pkg
     pyver="$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")' 2>/dev/null)"
     log "python3 -m venv is unavailable; installing python${pyver}-venv"
-    apt_get update -y >/dev/null 2>&1 || true
+    apt_get update -y || true
     for pkg in "python${pyver}-venv" "python3-venv"; do
       [[ -n "${pyver}" ]] || [[ "${pkg}" == "python3-venv" ]] || continue
-      if apt_get install -y "${pkg}" >/dev/null 2>&1; then
+      # Silenced deliberately: this is a PROBE across two possible package
+      # names, so the first one failing is normal and its output would be
+      # alarming rather than useful. The warn below covers both failing.
+      if apt_get install -y "${pkg}" 2>/dev/null; then
         log "installed ${pkg}"
         break
       fi
@@ -129,14 +132,15 @@ ensure_aws_cli() {
 
   if ! have_cmd unzip; then
     if have_cmd apt-get; then
-      # Through apt_get so a first-boot dpkg lock is waited out rather than
-      # silently swallowed - a failure here used to surface only as the
-      # much less helpful "could not install the AWS CLI".
-      apt_get update -y >/dev/null 2>&1 || true
-      apt_get install -y unzip >/dev/null 2>&1 \
-        || warn "apt could not install unzip (lock held, or no network?)"
+      # Not silenced: apt_get is quiet when it works and prints the full
+      # output when it does not, which is exactly what is needed here - a
+      # failure to get `unzip` is otherwise reported much later, and much
+      # less helpfully, as "could not install the AWS CLI".
+      apt_get update -y || true
+      apt_get install -y unzip \
+        || warn "apt could not install unzip (see the output above)"
     elif have_cmd dnf; then
-      ${sudo_cmd} dnf install -y unzip >/dev/null 2>&1 || true
+      ${sudo_cmd} dnf install -y unzip 2>&1 | sed 's/^/    /' || true
     elif have_cmd yum; then
       ${sudo_cmd} yum install -y unzip >/dev/null 2>&1 || true
     fi
@@ -152,9 +156,17 @@ ensure_aws_cli() {
     return 1
   fi
   unzip -q "${tmp}/awscliv2.zip" -d "${tmp}"
-  ${sudo_cmd} "${tmp}/aws/install" --update >/dev/null 2>&1 \
-    || ${sudo_cmd} "${tmp}/aws/install" >/dev/null 2>&1 \
-    || { warn "AWS CLI install failed"; rm -rf "${tmp}"; return 1; }
+  # Captured, not discarded. --update is tried first and fails normally on a
+  # host with no existing install, so only the second failure is worth
+  # showing - but when it does fail, the installer's own message is the
+  # only thing that explains why.
+  if ! ${sudo_cmd} "${tmp}/aws/install" --update >"${tmp}/install.log" 2>&1 \
+     && ! ${sudo_cmd} "${tmp}/aws/install" >"${tmp}/install.log" 2>&1; then
+    warn "the AWS CLI installer failed. Full output:"
+    sed 's/^/    /' "${tmp}/install.log" >&2
+    rm -rf "${tmp}"
+    return 1
+  fi
   rm -rf "${tmp}"
   hash -r 2>/dev/null || true
 
@@ -471,9 +483,42 @@ apt_ready() {
 # simpler and more reliable than polling with fuser - and needs no psmisc,
 # which a minimal cloud image does not have. Adds sudo when not root, so
 # call sites do not each repeat that.
+# Output policy: quiet on success, complete on failure.
+#
+# A successful install has nothing worth reading - a hundred lines of
+# "Unpacking / Setting up / Processing triggers for man-db" bury the step
+# banners and the few lines that do matter. A FAILED one is the opposite:
+# apt's own error text (unmet dependencies, a repo 404, a GPG failure, a
+# lock timeout) is the entire diagnosis. So the full output always goes to
+# a log, which is discarded on success and printed on failure.
+#
+# The alternative previously used here - `>/dev/null 2>&1 || true` - gets
+# the quiet part right and throws the diagnosis away with it. That is how
+# "could not install the AWS CLI" came to be reported on a host whose only
+# problem was a first-boot dpkg lock.
+#
+# A caller that expects a failure (probing for one of several package
+# names, say) can still silence the dump with its own `2>/dev/null`.
 apt_get() {
-  local sudo_cmd=""
+  local sudo_cmd="" log rc
   [[ "${EUID}" -ne 0 ]] && sudo_cmd="sudo"
   apt_ready
-  ${sudo_cmd} apt-get -o DPkg::Lock::Timeout="${APT_LOCK_WAIT:-300}" "$@"
+  log="$(mktemp)"
+  # DEBIAN_FRONTEND is set here rather than at the call sites so no install
+  # can stop on a debconf prompt - in a non-interactive setup run that is
+  # not a prompt, it is a hang with no output.
+  if ${sudo_cmd} env DEBIAN_FRONTEND=noninteractive \
+       apt-get -o DPkg::Lock::Timeout="${APT_LOCK_WAIT:-300}" -qq "$@" \
+       >"${log}" 2>&1; then
+    rc=0
+    # -qq is quiet, not silent: it still reports things like held packages.
+    # That is short and occasionally matters, so pass it through.
+    [[ -s "${log}" ]] && sed 's/^/    /' "${log}"
+  else
+    rc=$?
+    warn "apt-get $* failed (exit ${rc}). Full output:"
+    sed 's/^/    /' "${log}" >&2
+  fi
+  rm -f "${log}"
+  return "${rc}"
 }
