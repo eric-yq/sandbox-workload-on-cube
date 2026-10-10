@@ -226,15 +226,25 @@ POST /sandboxes  × N   (templateID = snapshotID)    ← 快照和模板共用�
 Cube 默认的存储后端 cubecow 用 `FICLONE` ioctl 实现快照 / 克隆 / 回滚，**ext4 不支持**，
 而 Ubuntu / Debian / WSL 默认都是 ext4。Cubelet 在非 reflink 文件系统上直接拒绝启动。
 
-`scripts/ensure-cube.sh` 在下载任何东西之前就拦下来，并打印对应的命令：
+`scripts/ensure-cube.sh` 在下载任何东西之前就拦下来。而 `setup-host.sh` 的第 2 步
+（`scripts/ensure-data-disk.sh`）会自动处理掉它：找到那块空闲数据盘，建 XFS + reflink，
+挂好并写进 fstab。
 
 ```bash
-sudo apt-get install -y xfsprogs
-sudo mkfs.xfs -m reflink=1 -f /dev/nvme1n1
-sudo mkdir -p /data/cubelet
-echo "/dev/nvme1n1 /data/cubelet xfs defaults,noatime 0 2" | sudo tee -a /etc/fstab
-sudo mount /data/cubelet
+DRY_RUN=1 bash scripts/ensure-data-disk.sh     # 先看它打算做什么
+sudo bash scripts/ensure-data-disk.sh          # setup-host.sh 第 2 步就是这个
 ```
+
+它只格**确认为空**的整盘（无文件系统、无挂载点、无持有运行系统的子分区、非根盘），
+按设备属性而不是按名字识别（Nitro 上 NVMe 名字不稳定），空闲盘多于一块时拒绝自己挑，
+要求你用 `DATA_DEVICE=` 指定。已经准备好的盘是 no-op；盘上已有带 reflink 的 XFS 会被
+直接接管而不是重新格。
+
+> 卷要挂在 **`/data`**，不是 `/data/cubelet`。CubeMaster 在 `/data/CubeMaster` 暂存
+> rootfs 产物，转换后的模板 rootfs 镜像（每个约 3 GiB × 7 个）默认落在
+> `/usr/local/services/cubetoolbox/cubebox_os_image`，也就是根卷。挂低一层会把这两样
+> 都留在根卷上。镜像目录的 bind mount 由 `setup-host.sh` 在装完 Cube 之后建立——不能
+> 更早，因为一键安装器拒绝一个非空但没有自己标记的安装根目录。
 
 上游 FAQ：[CubeSandbox#311](https://github.com/TencentCloud/CubeSandbox/issues/311)
 
@@ -355,24 +365,29 @@ Templates 确认 7 个 `arl-b*` 都是 READY）。
 > 不确定的时候直接跑 `smoke_test.py --all`：它对每个 template 真的 create 一次，
 > 所以能查出这种"状态是 READY 但用不了"的情况，而只看 template 列表查不出来。
 
-`setup-host.sh` 是幂等的七步：
+`setup-host.sh` 是幂等的八步：
 
-1. **Docker** — 镜像 builder + Cube 依赖容器的运行时。**必须在第 2 步之前**
-2. **CubeSandbox 运行时** — 校验 arch / `/dev/kvm` / glibc / Docker / **XFS reflink** / 磁盘，
+1. **Docker** — 镜像 builder + Cube 依赖容器的运行时。**必须在第 3 步之前**
+2. **数据盘** — 自动找到那块空闲 EBS 数据卷，建 XFS + `reflink=1`，挂到 `/data` 并按
+   UUID 写进 fstab。**必须在第 3 步之前**：第 3 步在非 reflink 文件系统上会直接拒绝，
+   而新装的 Ubuntu 一定是 ext4。已经准备好的主机是 no-op
+3. **CubeSandbox 运行时** — 校验 arch / `/dev/kvm` / glibc / Docker / **XFS reflink** / 磁盘，
    装一键包，调 Cubelet 配置，改 sysctl 和 systemd 的 `LimitNOFILE`，起服务并验证
-   CubeAPI `/health` + CubeProxy 在听 + CubeOps 节点注册
-   2b. **AWS CLI（按需）** — 只在 `REGISTRY` 指向 ECR 或设了 `S3_BUCKET` 时安装
-3. **数据集** — HumanEval + MBPP 到 `orchestrator/datasets/`
-4. **构建并推送** 统一沙盒镜像（本机原生架构，无需 QEMU）
-5. **建 7 个 template** — 走 HTTP API，见下
-6. **orchestrator venv**
-7. **冒烟测试** — 起一个沙盒跑一步删掉，再单独验一遍 snapshot / clone / rollback
+   CubeAPI `/health` + CubeProxy 在听 + CubeOps 节点注册；装完再把模板镜像目录
+   bind mount 到数据卷上（不能更早，装之前建这个目录会让一键安装器拒绝运行）
+   3b. **AWS CLI（按需）** — 只在 `REGISTRY` 指向 ECR 或设了 `S3_BUCKET` 时安装
+4. **数据集** — HumanEval + MBPP 到 `orchestrator/datasets/`
+5. **构建并推送** 统一沙盒镜像（本机原生架构，无需 QEMU）
+6. **建 7 个 template** — 走 HTTP API，见下
+7. **orchestrator venv**
+8. **冒烟测试** — 起一个沙盒跑一步删掉，再单独验一遍 snapshot / clone / rollback
 
 迭代时可以跳过重建：
 
 ```bash
 sudo bash scripts/setup-host.sh --skip-build          # 只重建 template
 sudo bash scripts/setup-host.sh --skip-templates      # 只重建镜像
+sudo bash scripts/setup-host.sh --skip-disk           # 磁盘自己准备好了
 ```
 
 单项调试：

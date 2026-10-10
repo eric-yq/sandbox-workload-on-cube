@@ -12,18 +12,24 @@
 #
 # Steps, in order:
 #   1. Docker                (image builder AND Cube's dependency containers)
-#   2. CubeSandbox runtime   (KVM / XFS-reflink checks, install, tune, start)
-#   2b. AWS CLI              (only when ECR or S3 is configured)
-#   3. Datasets              (HumanEval + MBPP)
-#   4. Build + push image    (the unified rollout-sandbox image)
-#   5. Templates             (7 templates, per-benchmark VM shapes)
-#   6. Orchestrator venv     (host process, needs all the host's vCPUs)
-#   7. Smoke test            (boot one sandbox, run one rollout step)
+#   2. Data disk             (find the spare volume, XFS+reflink, mount /data)
+#   3. CubeSandbox runtime   (KVM / XFS-reflink checks, install, tune, start,
+#                             then relocate the template image directory)
+#   3b. AWS CLI              (only when ECR or S3 is configured)
+#   4. Datasets              (HumanEval + MBPP)
+#   5. Build + push image    (the unified rollout-sandbox image)
+#   6. Templates             (7 templates, per-benchmark VM shapes)
+#   7. Orchestrator venv     (host process, needs all the host's vCPUs)
+#   8. Smoke test            (boot one sandbox, run one rollout step)
 #
 # Note Docker comes first here, where the AgentENV version installed the
 # sandbox runtime first: Cube's one-click install runs MySQL, Redis,
 # CubeProxy, CoreDNS and the WebUI as containers, so it needs a working
 # Docker daemon before it starts.
+#
+# The data disk comes before the runtime because ensure-cube.sh refuses to
+# install onto a non-reflink filesystem, which is what a fresh Ubuntu host
+# always has. Pass --skip-disk if you prepared /data yourself.
 #
 # Idempotent: safe to re-run. Use --skip-build to re-provision templates
 # without rebuilding the image.
@@ -36,12 +42,17 @@ source scripts/_lib.sh
 
 SKIP_BUILD=0
 SKIP_TEMPLATES=0
+SKIP_DISK=0
 for arg in "$@"; do
   case "${arg}" in
     --skip-build)     SKIP_BUILD=1 ;;
     --skip-templates) SKIP_TEMPLATES=1 ;;
+    --skip-disk)      SKIP_DISK=1 ;;
     -h|--help)
-      sed -n '2,30p' "$0"
+      # Print the header comment block, whatever length it is. This used to
+      # be `sed -n '2,30p'`, which silently truncated the help text every
+      # time a step was added to the header.
+      awk 'NR==1 && /^#!/ {next} /^#/ {print; next} {exit}' "$0"
       exit 0
       ;;
     *) die "unknown flag: ${arg}" ;;
@@ -77,7 +88,7 @@ as_user() {
 
 echo
 echo "############################################################"
-echo "# 1/7  Docker (image builder + Cube's dependency containers)"
+echo "# 1/8  Docker (image builder + Cube's dependency containers)"
 echo "############################################################"
 # Docker is needed twice over here: to build the template source image, and
 # by Cube's one-click install, which runs MySQL, Redis, CubeProxy, CoreDNS
@@ -88,9 +99,36 @@ bash scripts/ensure-builder.sh
 
 echo
 echo "############################################################"
-echo "# 2/7  CubeSandbox runtime"
+echo "# 2/8  Data disk (XFS with reflink, mounted at /data)"
+echo "############################################################"
+# Must precede step 3: ensure-cube.sh refuses to install onto a filesystem
+# that cannot do FICLONE, and a fresh Ubuntu host is always ext4. A host
+# that is already prepared (or has a btrfs root) is a no-op here.
+if (( SKIP_DISK )); then
+  log "skipped (--skip-disk)"
+else
+  bash scripts/ensure-data-disk.sh
+fi
+
+echo
+echo "############################################################"
+echo "# 3/8  CubeSandbox runtime"
 echo "############################################################"
 bash scripts/ensure-cube.sh
+
+# Relocate the converted-rootfs directory onto the data volume, now that the
+# install exists. This cannot happen earlier: the target lives inside
+# CubeSandbox's install root and the one-click installer refuses to run when
+# that root is non-empty but holds none of its own markers. Without it the
+# 7 template images (~3 GiB each) land on the root volume and provisioning
+# fills it partway through, reporting a misleading "insufficient disk space".
+if findmnt -no TARGET "${DATA_MOUNT:-/data}" >/dev/null 2>&1; then
+  bash tools/remote/bind-image-dir.sh "${DATA_MOUNT:-/data}"
+else
+  warn "${DATA_MOUNT:-/data} is not a separate mount, so template rootfs
+     images will stay on the root volume. That is fine for a smoke test and
+     a problem for a full sweep (~21 GiB for 7 templates)."
+fi
 # The invoking user needs to reach the docker socket for the build step.
 if [[ "${RUN_USER}" != "root" ]]; then
   # Not a pipeline: see out_matches() in _lib.sh (pipefail + grep -q).
@@ -103,7 +141,7 @@ fi
 
 echo
 echo "############################################################"
-echo "# 2b/7 AWS CLI (only when ECR or S3 is configured)"
+echo "# 3b/8 AWS CLI (only when ECR or S3 is configured)"
 echo "############################################################"
 # Done here, before the build, so a missing AWS CLI surfaces as one clear
 # message up front instead of aborting step 4 halfway through with
@@ -165,14 +203,14 @@ fi
 
 echo
 echo "############################################################"
-echo "# 3/7  Datasets (HumanEval + MBPP)"
+echo "# 4/8  Datasets (HumanEval + MBPP)"
 echo "############################################################"
 bash scripts/fetch-datasets.sh
 chown -R "${RUN_USER}" orchestrator/datasets 2>/dev/null || true
 
 echo
 echo "############################################################"
-echo "# 4/7  Build + push the rollout-sandbox image"
+echo "# 5/8  Build + push the rollout-sandbox image"
 echo "############################################################"
 if (( SKIP_BUILD )); then
   log "skipped (--skip-build)"
@@ -182,7 +220,7 @@ fi
 
 echo
 echo "############################################################"
-echo "# 5/7  CubeSandbox templates"
+echo "# 6/8  CubeSandbox templates"
 echo "############################################################"
 if (( SKIP_TEMPLATES )); then
   log "skipped (--skip-templates)"
@@ -196,7 +234,7 @@ fi
 
 echo
 echo "############################################################"
-echo "# 6/7  Orchestrator venv"
+echo "# 7/8  Orchestrator venv"
 echo "############################################################"
 # The orchestrator runs as a host process, not in a sandbox: it needs all
 # the host's vCPUs to drive load, it reads /proc/stat and the CubeSandbox
@@ -225,7 +263,7 @@ chown -R "${RUN_USER}" .venv 2>/dev/null || true
 
 echo
 echo "############################################################"
-echo "# 7/7  Smoke test"
+echo "# 8/8  Smoke test"
 echo "############################################################"
 # Boots one sandbox from the B3 template, runs one trajectory step through
 # it, tears it down, and then exercises snapshot / clone / rollback. This

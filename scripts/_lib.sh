@@ -306,3 +306,75 @@ require_cube() {
     fi
   fi
 }
+
+# ------------------------------------------------------------------
+# Disk helpers
+#
+# These two live here rather than in ensure-cube.sh because
+# ensure-data-disk.sh needs exactly the same logic: one asks "is this
+# directory reflink-capable", the other asks "which disk may I format".
+# Keeping one copy means the safety rules cannot drift between the script
+# that CHECKS the filesystem and the script that CREATES it.
+# ------------------------------------------------------------------
+
+# Ask the kernel whether this directory supports FICLONE, by using it.
+#
+# This is the capability Cube actually requires - cubecow implements
+# snapshot, clone and rollback with that ioctl - so a successful clone here
+# is proof, where `xfs_info | grep reflink=1` is only an indicator, and one
+# that is easy to read incorrectly (see check_reflink_fs in ensure-cube.sh).
+#
+# Returns 0 = clone succeeded, 1 = the filesystem refused it,
+#         2 = could not test (no permission to write here, for instance).
+# The three are kept distinct on purpose: treating "could not test" as
+# "unsupported" would abort on a host that is actually fine.
+reflink_probe() {
+  local dir="$1" src dst
+  mkdir -p "${dir}" 2>/dev/null || return 2
+  src="$(mktemp -p "${dir}" .reflink-probe.XXXXXX 2>/dev/null)" || return 2
+  dst="${src}.clone"
+  if ! dd if=/dev/zero of="${src}" bs=4096 count=1 status=none 2>/dev/null; then
+    rm -f "${src}" 2>/dev/null || true
+    return 2
+  fi
+  if cp --reflink=always "${src}" "${dst}" 2>/dev/null; then
+    rm -f "${src}" "${dst}" 2>/dev/null || true
+    return 0
+  fi
+  rm -f "${src}" "${dst}" 2>/dev/null || true
+  return 1
+}
+
+# Whole disks that are safe to consider formatting, space separated.
+#
+# A disk qualifies only when NOTHING in its tree carries a filesystem or a
+# mountpoint. Checking the disk's own row is not enough: a root disk with
+# partitions has an empty FSTYPE/MOUNTPOINT of its own while its children
+# hold the running system, so a scan that looked only at the disk row would
+# nominate the root disk and `mkfs` would destroy the host.
+#
+# Deliberately property-based, never name-based. On Nitro the kernel
+# enumerates NVMe devices in the order they answer discovery, which is
+# neither the block-device-mapping order nor stable across boots - so
+# "the data volume is /dev/nvme1n1" is a guess, and the cost of guessing
+# wrong is mkfs on the root filesystem.
+#   https://docs.aws.amazon.com/ebs/latest/userguide/identify-nvme-ebs-device.html
+spare_block_devices() {
+  local disk used out=""
+  for disk in $(lsblk -drno NAME,TYPE 2>/dev/null | awk '$2=="disk" {print $1}'); do
+    used="$(lsblk -rno FSTYPE,MOUNTPOINT "/dev/${disk}" 2>/dev/null \
+            | tr -d ' \n' || true)"
+    [[ -z "${used}" ]] && out="${out}${out:+ }/dev/${disk}"
+  done
+  echo "${out}"
+}
+
+# The whole disk backing /, e.g. /dev/nvme0n1. Empty if it cannot be
+# determined - callers must treat "unknown" as "do not touch anything".
+root_disk_device() {
+  local root_src root_disk
+  root_src="$(findmnt -no SOURCE / 2>/dev/null || true)"
+  [[ -n "${root_src}" ]] || return 0
+  root_disk="$(lsblk -no PKNAME "${root_src}" 2>/dev/null | tr -d ' ' | head -1 || true)"
+  [[ -n "${root_disk}" ]] && echo "/dev/${root_disk}"
+}

@@ -117,34 +117,10 @@ check_docker() {
 }
 
 # The check most likely to stop a fresh Ubuntu host.
-# Ask the kernel whether this directory supports FICLONE, by using it.
 #
-# This is the capability Cube actually requires - cubecow implements
-# snapshot, clone and rollback with that ioctl - so a successful clone here
-# is proof, where `xfs_info | grep reflink=1` is only an indicator, and one
-# that is easy to read incorrectly (see check_reflink_fs).
-#
-# Returns 0 = clone succeeded, 1 = the filesystem refused it,
-#         2 = could not test (no permission to write here, for instance).
-# The three are kept distinct on purpose: treating "could not test" as
-# "unsupported" would abort on a host that is actually fine.
-reflink_probe() {
-  local dir="$1" src dst
-  mkdir -p "${dir}" 2>/dev/null || return 2
-  src="$(mktemp -p "${dir}" .reflink-probe.XXXXXX 2>/dev/null)" || return 2
-  dst="${src}.clone"
-  if ! dd if=/dev/zero of="${src}" bs=4096 count=1 status=none 2>/dev/null; then
-    rm -f "${src}" 2>/dev/null || true
-    return 2
-  fi
-  if cp --reflink=always "${src}" "${dst}" 2>/dev/null; then
-    rm -f "${src}" "${dst}" 2>/dev/null || true
-    return 0
-  fi
-  rm -f "${src}" "${dst}" 2>/dev/null || true
-  return 1
-}
-
+# reflink_probe() and spare_block_devices() live in scripts/_lib.sh, because
+# scripts/ensure-data-disk.sh - the script that CREATES this filesystem -
+# has to apply exactly the same rules as the script that CHECKS it.
 check_reflink_fs() {
   local dir="${CUBE_DATA_DIR}"
   if [[ ! -d "${dir}" ]]; then
@@ -210,33 +186,34 @@ letting Cubelet be the judge"
     # ROOT filesystem, and a copy-pasteable `mkfs.xfs -f /dev/<root>` would
     # destroy the host. Only offer devices that carry no filesystem and are
     # not mounted.
-    local cur_dev candidates remedy disk
+    local cur_dev candidates remedy
     cur_dev="$(findmnt -no SOURCE --target "${dir}" 2>/dev/null || true)"
-    # A disk is only a candidate when NOTHING in its tree carries a
-    # filesystem or a mountpoint. Checking the disk's own row is not enough:
-    # a root disk with partitions has an empty FSTYPE/MOUNTPOINT of its own
-    # while its children hold the running system, and suggesting mkfs on it
-    # would destroy the host.
-    candidates=""
-    for disk in $(lsblk -drno NAME,TYPE 2>/dev/null | awk '$2=="disk" {print $1}'); do
-      local used
-      used="$(lsblk -rno FSTYPE,MOUNTPOINT "/dev/${disk}" 2>/dev/null \
-              | tr -d ' \n' || true)"
-      [[ -z "${used}" ]] && candidates="${candidates}${candidates:+ }/dev/${disk}"
-    done
+    # Only ever offer a disk where NOTHING in the tree carries a filesystem
+    # or a mountpoint - see spare_block_devices() in _lib.sh for why the
+    # disk's own row is not enough.
+    candidates="$(spare_block_devices)"
 
     if [[ -n "${candidates}" ]]; then
       local dev
       dev="${candidates%% *}"
       remedy="     An unused block device is available: ${dev}
      (all candidates: ${candidates})
-     Confirm it is the volume you mean before formatting it.
 
-     Mount it at /data, not at ${dir}: CubeMaster stages rootfs artifacts in
-     /data/CubeMaster, and the converted per-template rootfs images (~3 GB
-     EACH) go to ${CUBE_TOOLBOX}/cubebox_os_image. Mounting one level down
-     leaves both of those on the root volume, which then fills up partway
-     through provisioning. Bind-mount the image directory too.
+     Let the suite do it - this is what setup-host.sh runs for you, and it
+     re-checks every safety condition before touching anything:
+
+       DRY_RUN=1 bash scripts/ensure-data-disk.sh     # preview first
+       sudo bash scripts/ensure-data-disk.sh
+
+     If more than one candidate is listed it will refuse to choose; name the
+     one you mean with DATA_DEVICE=<device>.
+
+     By hand, if you prefer. Mount it at /data, not at ${dir}: CubeMaster
+     stages rootfs artifacts in /data/CubeMaster, and the converted
+     per-template rootfs images (~3 GB EACH) go to
+     ${CUBE_TOOLBOX}/cubebox_os_image. Mounting one level down leaves both of
+     those on the root volume, which then fills up partway through
+     provisioning. Bind-mount the image directory too.
 
        sudo mkfs.xfs -m reflink=1 ${dev}
        sudo mkdir -p /data

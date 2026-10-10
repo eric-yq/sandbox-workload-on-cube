@@ -40,7 +40,9 @@ ensure_ssh_key
 PRIVATE_IP="$(state_require PRIVATE_IP)"
 [[ "$(state_get DISKS_READY || echo 0)" == "1" ]] || die "disks are not prepared.
      Run: bash tools/02-prepare-disks.sh
-     (setup-host.sh would refuse anyway: it checks for XFS with reflink.)"
+     (ensure-cube.sh refuses to install onto a non-reflink filesystem. The
+     on-box scripts/ensure-data-disk.sh would auto-prepare it, but this
+     flow tracks the volume by ID from the AWS API, so it uses 02.)"
 
 step "waiting for the instance"
 wait_for_ssh 600
