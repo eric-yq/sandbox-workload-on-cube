@@ -86,26 +86,53 @@ finalize_instance() {
      for egress. 03-setup-env.sh will hang on the first download otherwise."
   fi
 
-  # Record the volume IDs. 02-prepare-disks.sh matches the data volume ID
-  # against the NVMe serial to find the device, which is the only safe way:
-  # NVMe enumeration order is not the block device mapping order, so a
-  # name-based guess can point at the root volume.
-  DATA_VOLUME_ID="$(aws_ ec2 describe-instances --instance-ids "${iid}" \
-    --query "Reservations[0].Instances[0].BlockDeviceMappings[?DeviceName=='${DATA_DEVICE_NAME}'].Ebs.VolumeId | [0]" \
-    --output text)"
+  # Record the volume IDs. The data volume ID in particular is what
+  # 02-prepare-disks.sh matches against the NVMe serial to find the device,
+  # which is the only safe way: NVMe enumeration order is not the block
+  # device mapping order, so a name-based guess can point at the root volume.
   ROOT_VOLUME_ID="$(aws_ ec2 describe-instances --instance-ids "${iid}" \
     --query "Reservations[0].Instances[0].BlockDeviceMappings[?DeviceName=='${root_dev}'].Ebs.VolumeId | [0]" \
     --output text)"
-  [[ "${DATA_VOLUME_ID}" == vol-* ]] || die "could not find a volume at ${DATA_DEVICE_NAME} on ${iid}.
+  state_set ROOT_VOLUME_ID "${ROOT_VOLUME_ID}"
+  log "root volume ${ROOT_VOLUME_ID}"
+
+  # Whether there is a gp3 data volume is DETECTED from the instance, not
+  # taken from this run's intent. That matters because the branch above
+  # adopts an already-running instance and calls this function directly, so
+  # any launch-time decision variable would be unset there. It also means
+  # .state always describes the machine as it actually is.
+  DATA_VOLUME_ID="$(aws_ ec2 describe-instances --instance-ids "${iid}" \
+    --query "Reservations[0].Instances[0].BlockDeviceMappings[?DeviceName=='${DATA_DEVICE_NAME}'].Ebs.VolumeId | [0]" \
+    --output text 2>/dev/null || echo "None")"
+
+  if [[ "${DATA_VOLUME_ID}" == vol-* ]]; then
+    state_set DATA_VOLUME_ID "${DATA_VOLUME_ID}"
+    state_set DATA_DEVICE_NAME "${DATA_DEVICE_NAME}"
+    state_set DATA_BACKING "ebs"
+    log "data volume ${DATA_VOLUME_ID} (backing: ebs)"
+  else
+    # No second EBS volume. On a 'd' family type that is intended - the local
+    # NVMe disks are the data store. On anything else it means the launch did
+    # not attach what was asked for, which is worth saying loudly.
+    local it_store
+    it_store="$(aws_ ec2 describe-instance-types \
+      --instance-types "$(state_get INSTANCE_TYPE || echo "${INSTANCE_TYPE}")" \
+      --query 'InstanceTypes[0].InstanceStorageInfo.TotalSizeInGB' \
+      --output text 2>/dev/null || echo "None")"
+    state_set DATA_VOLUME_ID ""
+    state_set DATA_BACKING "instance-store"
+    if [[ -n "${it_store}" && "${it_store}" != "None" && "${it_store}" != "0" ]]; then
+      log "no gp3 data volume; ${it_store} GB of local NVMe will be used instead"
+      log "  02-prepare-disks.sh stripes the local disks into one LVM volume"
+    else
+      warn "no volume at ${DATA_DEVICE_NAME} on ${iid}, and this type has no
+     local NVMe either. 02-prepare-disks.sh will have nothing to prepare.
      Attached devices:
 $(aws_ ec2 describe-instances --instance-ids "${iid}" \
-    --query 'Reservations[0].Instances[0].BlockDeviceMappings[].[DeviceName,Ebs.VolumeId]' \
-    --output text 2>/dev/null | sed 's/^/       /')"
-  state_set DATA_VOLUME_ID "${DATA_VOLUME_ID}"
-  state_set ROOT_VOLUME_ID "${ROOT_VOLUME_ID}"
-  state_set DATA_DEVICE_NAME "${DATA_DEVICE_NAME}"
-  log "data volume ${DATA_VOLUME_ID}"
-  log "root volume ${ROOT_VOLUME_ID}"
+      --query 'Reservations[0].Instances[0].BlockDeviceMappings[].[DeviceName,Ebs.VolumeId]' \
+      --output text 2>/dev/null | sed 's/^/       /')"
+    fi
+  fi
 
   step "waiting for SSH"
   wait_for_ssh 900
@@ -311,8 +338,52 @@ aws_ ec2 describe-security-groups --group-ids ${SG_IDS} \
 sg_json="$(printf '%s' "${SG_IDS}" | tr ' ' '\n' | grep -v '^$' \
            | python3 -c 'import json,sys; print(json.dumps([l.strip() for l in sys.stdin]))')"
 
+# --- data volume: skip the gp3 when the instance has local NVMe SSDs -----
+# Asked of the API rather than inferred from a 'd' in the type name: the API
+# is authoritative, and the naming is not a contract worth parsing. A 'd'
+# instance striping its local SSDs (see tools/02-prepare-disks.sh) gets far
+# more throughput than the gp3 for free, so creating the volume as well just
+# bills a 1000 GB provisioned-IOPS disk that nothing ever mounts.
+inst_store_gb="$(aws_ ec2 describe-instance-types --instance-types "${INSTANCE_TYPE}" \
+  --query 'InstanceTypes[0].InstanceStorageInfo.TotalSizeInGB' \
+  --output text 2>/dev/null || echo "None")"
+
+HAS_INSTANCE_STORE=0
+if [[ -n "${inst_store_gb}" && "${inst_store_gb}" != "None" && "${inst_store_gb}" != "0" ]]; then
+  HAS_INSTANCE_STORE=1
+fi
+
+# Same vocabulary as 02-prepare-disks.sh, so one setting drives both.
+CREATE_DATA_VOLUME=1
+case "${DATA_BACKING:-auto}" in
+  auto)
+    if (( HAS_INSTANCE_STORE )); then CREATE_DATA_VOLUME=0; fi
+    ;;
+  instance-store)
+    (( HAS_INSTANCE_STORE )) || die "DATA_BACKING=instance-store but ${INSTANCE_TYPE}
+     has no local NVMe storage (InstanceStorageInfo.TotalSizeInGB=${inst_store_gb}).
+     Use a 'd' family type (c8gd, m7id, i4i, ...) or DATA_BACKING=ebs."
+    CREATE_DATA_VOLUME=0
+    ;;
+  ebs) CREATE_DATA_VOLUME=1 ;;
+  *) die "DATA_BACKING must be auto, instance-store or ebs (got '${DATA_BACKING}')" ;;
+esac
+
+if (( CREATE_DATA_VOLUME )); then
+  if (( HAS_INSTANCE_STORE )); then
+    log "${INSTANCE_TYPE} has ${inst_store_gb} GB of local NVMe, but DATA_BACKING=ebs"
+    log "  -> creating the ${DATA_VOLUME_GB} GB gp3 anyway; the local disks stay unused"
+  else
+    log "no local NVMe on ${INSTANCE_TYPE}; creating a ${DATA_VOLUME_GB} GB gp3 data volume"
+  fi
+else
+  log "${INSTANCE_TYPE} has ${inst_store_gb} GB of local NVMe"
+  log "  -> NOT creating a gp3 data volume; 02-prepare-disks.sh will stripe the local disks"
+fi
+
 step "launching ${INSTANCE_TYPE}"
-bdm="$(cat <<JSON
+if (( CREATE_DATA_VOLUME )); then
+  bdm="$(cat <<JSON
 [
   {"DeviceName":"${ROOT_DEV}",
    "Ebs":{"VolumeSize":${ROOT_VOLUME_GB},"VolumeType":"gp3",
@@ -324,6 +395,16 @@ bdm="$(cat <<JSON
 ]
 JSON
 )"
+else
+  bdm="$(cat <<JSON
+[
+  {"DeviceName":"${ROOT_DEV}",
+   "Ebs":{"VolumeSize":${ROOT_VOLUME_GB},"VolumeType":"gp3",
+          "DeleteOnTermination":true,"Encrypted":true}}
+]
+JSON
+)"
+fi
 
 tag_spec="ResourceType=instance,Tags=[{Key=Name,Value=${INSTANCE_NAME}}"
 tag_spec_v="ResourceType=volume,Tags=[{Key=Name,Value=${INSTANCE_NAME}}"

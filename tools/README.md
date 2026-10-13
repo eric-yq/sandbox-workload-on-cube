@@ -15,6 +15,16 @@ bash tools/05-run-benchmark.sh         # 跑 benchmark，结果拉回本地
 bash tools/99-teardown.sh              # 销毁（实例 + 两块卷）
 ```
 
+Graviton 机型可选：换内核页大小（只对 arm64 生效）
+
+```bash
+bash tools/98-switch-kernel.sh         # 只报告当前状态，什么都不改
+bash tools/98-switch-kernel.sh 64k     # 切 64 KiB 页，重启并校验
+bash tools/98-switch-kernel.sh 4k      # 切回 4 KiB
+```
+
+切换会**重启实例**，所以不带参数时只打印状态，不动任何东西。
+
 ## 快档（BENCH_PROFILE）
 
 `config.env` 里的 `BENCH_ENV_OVERRIDES_QUICK` 是一组短跑参数（约 12 分钟跑完七项，而不是几小时）。两种用法：
@@ -48,13 +58,69 @@ per-benchmark 的键（`B1_CONCURRENCIES`、`B4_CONCURRENCIES`、`B8_TRIALS`、`
 | --- | --- | --- | --- |
 | `00-preflight.sh` | 本地 | 预检：本地工具、AWS 凭据、key 权限、机型在哪些 AZ 有货、AMI 能否解析、IAM profile、EBS 参数是否越界、成本提示 | 是（只读） |
 | `01-create-instance.sh` | 本地 | 解析 Ubuntu AMI → 选 AZ/子网/安全组 → `RunInstances`（两块卷在 block device mapping 里）→ 等 running → 记录私网 IP 和 volume ID | 否（会再建一台，且会先问） |
-| `02-prepare-disks.sh` | 本地 → SSH | 按 volume-id 定位设备 → `mkfs.xfs -m reflink=1` → 按 UUID 挂 `/data` → bind mount `cubebox_os_image` → 验证 FICLONE | 是（已有 reflink XFS 就保留数据） |
+| `02-prepare-disks.sh` | 本地 → SSH | 选后端（本地 NVMe 条带成 LVM／或按 volume-id 定位 gp3）→ `mkfs.xfs -m reflink=1` → 按 UUID 挂 `/data` → 建 Cube 目录 → 验证 FICLONE | 是（已有 reflink XFS 就保留数据） |
 | `03-setup-env.sh` | 本地 → SSH | rsync repo → 生成 `.env` → `setup-host.sh --skip-templates` | 是 |
 | `04-provision-templates.sh` | 本地 → SSH | `ensure-cube.sh` → `provision-templates.sh` → `smoke_test.py --all` | 是（每次重建模板） |
 | `05-run-benchmark.sh` | 本地 → SSH | `run-suite.sh` 或 `run-single.sh`（nohup，可断开）→ 拉回结果 → 查残留 | 是 |
+| `98-switch-kernel.sh` | 本地 → SSH | **仅 arm64**：装 `linux-aws-64k`（或 `linux-aws`）→ 钉 GRUB 到精确 menuentry → 重启 → 校验 `getconf PAGESIZE` | 是（已是目标页大小则不动、不重启） |
 | `99-teardown.sh` | 本地 | 销毁实例 + 确认两块卷已删；`--stop` 只停机保留磁盘 | 是 |
 
 `03-setup-env.sh`–`05-run-benchmark.sh` 刻意只是**薄封装**，真正的安装/供给/压测逻辑全在 `scripts/` 里 —— 那些脚本已经在真机上验证过，复制一份只会让两边慢慢走偏。
+
+## 数据盘：本地 NVMe 还是 EBS
+
+`02-prepare-disks.sh` 支持两种后端，由 `DATA_BACKING` 选择，默认 `auto`：
+
+| `DATA_BACKING` | 用什么 | 说明 |
+| --- | --- | --- |
+| `auto`（默认） | 有本地 SSD 就用，否则用 EBS | — |
+| `instance-store` | **所有**本地 NVMe SSD 条带成一个 LVM 卷 | 仅 `d` 系机型（`c8gd`、`m7id`、`i4i` …）；随实例免费，比 gp3 快得多 |
+| `ebs` | `01` 创建的那块 gp3 | 持久，机型无要求 |
+
+识别方式是**看硬件而不是看机型名**：Nitro 把本地盘的 model 报成 `Amazon EC2 NVMe Instance Storage`，EBS 报成 `Amazon Elastic Block Store`，所以两者不会混。认不出来时脚本直接报错并打印 `lsblk`，不会去猜——猜错的代价是在根盘上 `mkfs`。个别硬件 model 字符串不一样时，可以用 `INSTANCE_STORE_DEVICES="/dev/nvme1n1 /dev/nvme2n1"` 显式指定。
+
+LV 是**条带**而不是线性的（`-i N -I 256k`）。线性卷的吞吐等于单盘，那就等于白用本地盘了。
+
+```bash
+bash tools/02-prepare-disks.sh                        # auto
+DATA_BACKING=ebs bash tools/02-prepare-disks.sh       # 忽略本地盘，强制用 gp3
+```
+
+### 本地盘是易失的，这一点会咬人
+
+Instance store **能活过 reboot，但活不过 stop/start** —— 盘会回来，但是空的。因此：
+
+- fstab 用 `nofail,x-systemd.device-timeout=10s`。少了 `nofail`，stop/start 之后下次开机会卡在一个已不存在的 UUID 上。
+- `bash tools/98-switch-kernel.sh` 只是重启，**安全**。
+- `99-teardown.sh --stop` 之后再开机，`/data` 整个没了（不只是模板），要按顺序重跑 **02 → 03 → 04**。`.state` 里的 `DISKS_READY=1` 这时是过期信息。
+### `01` 会自动不建那块 gp3
+
+`01-create-instance.sh` 先问 API（`InstanceStorageInfo.TotalSizeInGB`，而不是去解析机型名里的 `d`）：机型自带本地 NVMe 时，**第二块 gp3 根本不创建**，省掉一块 1000 GB provisioned-IOPS 盘的钱。
+
+```bash
+bash tools/01-create-instance.sh                      # auto：d 系机型不建 gp3
+DATA_BACKING=ebs bash tools/01-create-instance.sh     # 即使有本地盘也建 gp3
+```
+
+决定会记进 `.state` 的 `DATA_BACKING`，`02` 默认继承它 —— 否则你在 `01` 指定了 `ebs`，`02` 的 `auto` 又会去用本地盘，两边就对不上了。环境变量显式给出时仍然优先。
+
+`.state` 里的 `DATA_BACKING` 是**从实例实际的 block device 探测**出来的，不是记录当时的意图，所以"接管一台已在运行的实例"这条路径也能得到正确结果。没有 gp3 且机型也没有本地盘时，`01` 会明确报警而不是静默通过。
+
+## arm64 为什么要试 64 KiB 页
+
+Cube 给每个沙箱的 guest 内存是同一个模板内存快照的 `MAP_PRIVATE` 映射，所以 guest 首次写每一页都要在宿主上做一次 copy-on-write。在 arm64 上每次 COW 要付**两轮全机广播 TLBI**（宿主 stage-1 的 `ptep_clear_flush`，加 mmu-notifier 触发的 stage-2 `__kvm_tlb_flush_vmid_range`），而 `dsb(ish)` 要等所有 PE 确认 —— 192 核时这个代价很大。页变大 ⇒ 每个映射的页表项变少 ⇒ 广播次数大幅下降。
+
+在 c9g.metal-48xl 上实测 B1（同一内核版本 `7.0.0-1014`，只改页大小；两次都是刚重启后测，排除了重启本身的影响）：
+
+| 并发 | 4 KiB | 64 KiB | 提升 |
+| --- | --- | --- | --- |
+| c=64 | 1963 | **2480** | +26%（并反超 c8i.metal-48xl 的 2438） |
+| c=128 | 1792 | 2372 | +32% |
+| c=256 | 1556 | 2115 | +36% |
+
+`create p50` 在 c=64 从 136 ms 降到 77 ms，和 x86 的 75 ms 基本持平；宿主 TLB/COW 开销占比从 22.4% 降到 5.2%。
+
+代价是内存：同样的沙箱数，宿主内存峰值从约 30 GB 涨到约 75–79 GB（约 2.5 倍）。**提高并发前先确认余量。** 两个内核都会保留，随时可以 `bash tools/98-switch-kernel.sh` 切回去。
 
 ## EBS 为什么是这个配置
 
@@ -75,7 +141,7 @@ gp3 上限：80,000 IOPS（需 ≥160 GiB）、2,000 MiB/s。`m8g.metal-48xl` �
 
 - `04-provision-templates.sh` 不以 "status: READY" 为准，它跑 `smoke_test.py --all`，对每个模板真的建一次沙盒
 - `05-run-benchmark.sh` 开跑前先做一次 smoke 预检，免得 20 分钟后才发现白跑
-- `99-teardown.sh --stop` 之后再开机，**必须重跑 `04-provision-templates.sh`**
+- `99-teardown.sh --stop` 之后再开机，**必须重跑 `04-provision-templates.sh`**；如果数据盘用的是本地 NVMe（`DATA_BACKING=instance-store`），`/data` 整个都没了，要从 **02** 开始重跑
 
 **2. `.env` 里的覆盖项必须放在最前面。** `scripts/_lib.sh` 的 `load_env()` 只在变量尚未设置时才赋值，所以文件里**第一次出现的才生效**。`03-setup-env.sh` 因此是把覆盖项**前置**写入的 —— 追加到末尾会静默失效。
 
