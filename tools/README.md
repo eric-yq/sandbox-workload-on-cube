@@ -65,6 +65,8 @@ per-benchmark 的键（`B1_CONCURRENCIES`、`B4_CONCURRENCIES`、`B8_TRIALS`、`
 | `98-switch-kernel.sh` | 本地 → SSH | **仅 arm64**：装 `linux-aws-64k`（或 `linux-aws`）→ 钉 GRUB 到精确 menuentry → 重启 → 校验 `getconf PAGESIZE` | 是（已是目标页大小则不动、不重启） |
 | `99-teardown.sh` | 本地 | 销毁实例 + 确认两块卷已删；`--stop` 只停机保留磁盘 | 是 |
 
+另外 `cube-bench/` 是一个独立的小工具，跑在 **Cube 节点上**而不是本地，用 CubeSandbox 自带的 `examples/cube-bench` 重复采样沙盒创建性能并汇总成一张表 —— 和上面这条 00–99 的流水线没有依赖关系，见 [`cube-bench/README.md`](cube-bench/README.md)。
+
 `03-setup-env.sh`–`05-run-benchmark.sh` 刻意只是**薄封装**，真正的安装/供给/压测逻辑全在 `scripts/` 里 —— 那些脚本已经在真机上验证过，复制一份只会让两边慢慢走偏。
 
 ## 数据盘：本地 NVMe 还是 EBS
@@ -93,18 +95,7 @@ Instance store **能活过 reboot，但活不过 stop/start** —— 盘会回�
 - fstab 用 `nofail,x-systemd.device-timeout=10s`。少了 `nofail`，stop/start 之后下次开机会卡在一个已不存在的 UUID 上。
 - `bash tools/98-switch-kernel.sh` 只是重启，**安全**。
 - `99-teardown.sh --stop` 之后再开机，`/data` 整个没了（不只是模板），要按顺序重跑 **02 → 03 → 04**。`.state` 里的 `DISKS_READY=1` 这时是过期信息。
-### `01` 会自动不建那块 gp3
-
-`01-create-instance.sh` 先问 API（`InstanceStorageInfo.TotalSizeInGB`，而不是去解析机型名里的 `d`）：机型自带本地 NVMe 时，**第二块 gp3 根本不创建**，省掉一块 1000 GB provisioned-IOPS 盘的钱。
-
-```bash
-bash tools/01-create-instance.sh                      # auto：d 系机型不建 gp3
-DATA_BACKING=ebs bash tools/01-create-instance.sh     # 即使有本地盘也建 gp3
-```
-
-决定会记进 `.state` 的 `DATA_BACKING`，`02` 默认继承它 —— 否则你在 `01` 指定了 `ebs`，`02` 的 `auto` 又会去用本地盘，两边就对不上了。环境变量显式给出时仍然优先。
-
-`.state` 里的 `DATA_BACKING` 是**从实例实际的 block device 探测**出来的，不是记录当时的意图，所以"接管一台已在运行的实例"这条路径也能得到正确结果。没有 gp3 且机型也没有本地盘时，`01` 会明确报警而不是静默通过。
+- 用本地盘时，`01` 建的那块 gp3 仍会挂着并计费。想省掉就把 `DATA_VOLUME_GB` 调小，或在 `01-create-instance.sh` 里去掉第二块 block device。02 已经不再强制要求这块卷存在。
 
 ## arm64 为什么要试 64 KiB 页
 
