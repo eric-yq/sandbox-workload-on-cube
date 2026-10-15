@@ -65,7 +65,10 @@ per-benchmark 的键（`B1_CONCURRENCIES`、`B4_CONCURRENCIES`、`B8_TRIALS`、`
 | `98-switch-kernel.sh` | 本地 → SSH | **仅 arm64**：装 `linux-aws-64k`（或 `linux-aws`）→ 钉 GRUB 到精确 menuentry → 重启 → 校验 `getconf PAGESIZE` | 是（已是目标页大小则不动、不重启） |
 | `99-teardown.sh` | 本地 | 销毁实例 + 确认两块卷已删；`--stop` 只停机保留磁盘 | 是 |
 
-另外 `cube-bench/` 是一个独立的小工具，跑在 **Cube 节点上**而不是本地，用 CubeSandbox 自带的 `examples/cube-bench` 重复采样沙盒创建性能并汇总成一张表 —— 和上面这条 00–99 的流水线没有依赖关系，见 [`cube-bench/README.md`](cube-bench/README.md)。
+另外两个子目录是独立的小工具，和上面这条 00–99 的流水线没有依赖关系：
+
+- [`cube-bench/`](cube-bench/README.md) —— 跑在 **Cube 节点上**，用 CubeSandbox 自带的 `examples/cube-bench` 重复采样沙盒创建性能并汇总成一张表
+- [`core-to-core-latency/`](core-to-core-latency/README.md) —— 测任意两核之间传递一个缓存行的延迟，用于跨机型对比。B1 在 arm64 上的扩展性问题（广播 TLBI 序列化）就是这个量纲
 
 `03-setup-env.sh`–`05-run-benchmark.sh` 刻意只是**薄封装**，真正的安装/供给/压测逻辑全在 `scripts/` 里 —— 那些脚本已经在真机上验证过，复制一份只会让两边慢慢走偏。
 

@@ -53,6 +53,27 @@ log()  { echo "==> $*"; }
 warn() { echo "WARN: $*" >&2; }
 die()  { echo "ERROR: $*" >&2; exit 1; }
 
+# `cmd | grep -q pat` is unsafe under `set -o pipefail` - see the long note on
+# out_matches() in scripts/_lib.sh. The remote scripts are shipped standalone
+# by scp and cannot source that file, so the helper is repeated here.
+out_matches() {
+  local haystack="$1" pattern="$2"
+  grep -qE "${pattern}" <<< "${haystack}"
+}
+
+# Does the filesystem at $1 have reflink enabled?
+#
+# This was `xfs_info "$1" | grep -q 'reflink=1'`, which under pipefail can
+# report failure precisely when reflink IS present (grep -q exits first,
+# xfs_info dies of SIGPIPE, pipefail promotes the 141). Not cosmetic here: the
+# caller treats "no reflink" as "this filesystem must be recreated", so the
+# race could condemn a perfectly good /data. Whether it fires depends on
+# whether xfs_info finished before grep exited - it passes in testing and
+# bites in production.
+xfs_has_reflink() {
+  out_matches "$(sudo xfs_info "$1" 2>/dev/null)" 'reflink=1'
+}
+
 ensure_pkg() {
   local cmd="$1" pkg="$2"
   command -v "${cmd}" >/dev/null 2>&1 && return 0
@@ -228,7 +249,7 @@ if [[ "${existing_fs}" == "xfs" ]]; then
   # useless to Cube and has to be rebuilt.
   tmpd="$(mktemp -d)"
   if sudo mount "${DEV}" "${tmpd}" 2>/dev/null; then
-    if sudo xfs_info "${tmpd}" 2>/dev/null | grep -q 'reflink=1'; then
+    if xfs_has_reflink "${tmpd}"; then
       log "${DEV} is already XFS with reflink=1 - keeping it (data preserved)"
       needs_mkfs=0
     else
@@ -328,7 +349,7 @@ fi
 
 # ---------------------------------------------------------------- verify
 log "verifying"
-sudo xfs_info "${MOUNT}" | grep -q 'reflink=1' \
+xfs_has_reflink "${MOUNT}" \
   || die "${MOUNT} is mounted but xfs_info does not report reflink=1"
 
 # Prove FICLONE actually works rather than trusting the flag.

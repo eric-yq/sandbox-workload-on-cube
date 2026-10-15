@@ -29,6 +29,21 @@ esac
 log()  { echo "    $*"; }
 die()  { echo "ERROR: $*" >&2; exit 1; }
 
+# `cmd | grep -q pat` is unsafe under `set -o pipefail` - see the long note on
+# out_matches() in scripts/_lib.sh. The remote scripts are shipped standalone
+# by scp and cannot source that file, so the helper is repeated here.
+#
+# That footgun bit this script specifically. The apt check below used
+#   apt-cache policy <pkg> | grep -q 'Candidate: [0-9]'
+# and measured PIPESTATUS=(141 0): grep matched, apt-cache then died of SIGPIPE
+# writing into the closed pipe, pipefail promoted the 141. So the script
+# reported "neither ... is available from apt" while the package was available
+# the whole time, and a page-size A/B measurement went down a dead end.
+out_matches() {
+  local haystack="$1" pattern="$2"
+  grep -qE "${pattern}" <<< "${haystack}"
+}
+
 # ---------------------------------------------------------------- guards
 ARCH="$(uname -m)"
 [[ "${ARCH}" == "aarch64" ]] || die "this host is ${ARCH}, not aarch64.
@@ -43,17 +58,44 @@ log "running kernel ${CUR_KERNEL}, page size ${CUR_PAGESIZE}"
 
 if [[ "${TARGET}" == "64k" ]]; then
   WANT_PAGESIZE=65536
+  WANT_SUFFIX="-aws-64k"
+  META_PKG="linux-aws-64k"
 else
   WANT_PAGESIZE=4096
+  WANT_SUFFIX="-aws"
+  META_PKG="linux-aws"
 fi
 
 # Already there? Do nothing, so this is safe to call unconditionally from
 # automation and never reboots a host that does not need it.
+# Running the right page size is necessary but NOT sufficient: GRUB_DEFAULT
+# must point at the same flavour, or the next unrelated reboot silently
+# changes the page size under the operator. That state is reachable whenever a
+# previous run pinned GRUB and the reboot was skipped or failed, so check both
+# and fall through to the pinning logic when only GRUB is wrong.
+grub_pinned_to() {  # $1 = -aws | -aws-64k
+  local d
+  d="$(grep '^GRUB_DEFAULT=' /etc/default/grub 2>/dev/null || true)"
+  # Matches the menuentry-id form this script writes, e.g.
+  #   ...>gnulinux-7.0.0-1014-aws-64k-advanced-<uuid>
+  # The literal "-advanced-" immediately after the suffix is what stops a
+  # "-aws" lookup from matching a "-aws-64k" entry. Anything else (GRUB's
+  # default "0"/"saved", or a human-written title form) simply fails to match
+  # and we re-pin, which is the safe direction.
+  out_matches "${d}" "gnulinux-[0-9][0-9.-]*${1}-advanced-"
+}
+
 if [[ "${CUR_PAGESIZE}" == "${WANT_PAGESIZE}" ]]; then
-  log "already running a ${TARGET} kernel; nothing to do"
-  echo "SWITCH_KERNEL_RESULT=no_change"
-  exit 0
+  if grub_pinned_to "${WANT_SUFFIX}"; then
+    log "already running a ${TARGET} kernel and GRUB agrees; nothing to do"
+    echo "SWITCH_KERNEL_RESULT=no_change"
+    exit 0
+  fi
+  log "already running a ${TARGET} kernel, but GRUB_DEFAULT does not point at"
+  log "a ${WANT_SUFFIX} entry - re-pinning so the next reboot stays on ${TARGET}"
+  REPIN_ONLY=1
 fi
+REPIN_ONLY="${REPIN_ONLY:-0}"
 
 # The running kernel's base version, e.g. 7.0.0-1014 from 7.0.0-1014-aws-64k.
 # Used to keep page size the ONLY variable that changes.
@@ -77,17 +119,14 @@ apt_retry() {
   return 1
 }
 
-if [[ "${TARGET}" == "64k" ]]; then
-  WANT_SUFFIX="-aws-64k"
-  META_PKG="linux-aws-64k"
-else
-  WANT_SUFFIX="-aws"
-  META_PKG="linux-aws"
-fi
-
 # An exact-version image is what we want; the meta package tracks "latest",
 # which on a stale instance can be a different version than the one running.
 EXACT_IMG="linux-image-${BASE_VER}${WANT_SUFFIX}"
+
+# Does apt report a real Candidate version for this package?
+apt_installable() {
+  out_matches "$(apt-cache policy "$1" 2>/dev/null)" 'Candidate:[[:space:]]+[0-9]'
+}
 
 installed_kernel_for() {
   # Newest /boot/vmlinuz with exactly this suffix. The glob already excludes
@@ -104,10 +143,10 @@ if [[ -z "${HAVE}" ]]; then
   log "no ${WANT_SUFFIX} kernel installed; installing"
   sudo -n apt-get -y -o DPkg::Lock::Timeout=60 update >/dev/null 2>&1 || true
 
-  if apt-cache policy "${EXACT_IMG}" 2>/dev/null | grep -q 'Candidate: [0-9]'; then
+  if apt_installable "${EXACT_IMG}"; then
     log "installing ${EXACT_IMG} (matches the running version)"
     apt_retry install "${EXACT_IMG}" || die "failed to install ${EXACT_IMG}"
-  elif apt-cache policy "${META_PKG}" 2>/dev/null | grep -q 'Candidate: [0-9]'; then
+  elif apt_installable "${META_PKG}"; then
     log "exact ${EXACT_IMG} unavailable; falling back to meta package ${META_PKG}"
     apt_retry install "${META_PKG}" || die "failed to install ${META_PKG}"
   else
@@ -139,15 +178,19 @@ fi
 # the exact submenu>entry id instead.
 [[ -f /boot/grub/grub.cfg ]] || die "/boot/grub/grub.cfg not found"
 
+# The `|| true` on these two is not cosmetic: `head -1` exits after the first
+# line, so under pipefail the upstream greps can be killed by SIGPIPE and the
+# assignment would abort the script. The emptiness checks below are the real
+# guard, so swallowing the pipeline status here is both safe and necessary.
 SUB_ID="$(grep -oE "^submenu '[^']*' \\\$menuentry_id_option '[^']+'" /boot/grub/grub.cfg \
-          | grep -oE "'gnulinux-advanced-[^']+'" | tr -d "'" | head -1)"
+          | grep -oE "'gnulinux-advanced-[^']+'" | tr -d "'" | head -1 || true)"
 # The closing quote right after ${HAVE} is what excludes the "(recovery
 # mode)" entry, and it also keeps a -aws lookup from matching -aws-64k.
 # Note `.*` and not `[^\n]*`: in ERE a bracket expression takes \n
 # literally, so [^\n] means "not n, not backslash" and would fail on the
 # "--class gnu-linux" text present on every menuentry line.
 ENT_ID="$(grep -oE "menuentry '[^']*Linux ${HAVE}' .*\\\$menuentry_id_option '[^']+'" /boot/grub/grub.cfg \
-          | grep -oE "'gnulinux-[^']+'" | tr -d "'" | head -1)"
+          | grep -oE "'gnulinux-[^']+'" | tr -d "'" | head -1 || true)"
 
 [[ -n "${SUB_ID}" ]] || die "could not find the 'Advanced options' submenu id in grub.cfg"
 [[ -n "${ENT_ID}" ]] || die "could not find a grub menuentry for kernel ${HAVE}"
@@ -168,4 +211,12 @@ log "grub updated"
 
 # Both kernels stay installed, so this is reversible by re-running with the
 # other argument.
-echo "SWITCH_KERNEL_RESULT=reboot_required"
+if [[ "${REPIN_ONLY}" == "1" ]]; then
+  # We were already running the requested page size and only GRUB disagreed,
+  # so the host is now consistent without a reboot. Reporting no_change keeps
+  # 98-switch-kernel.sh from rebooting a host that does not need it.
+  log "GRUB re-pinned; already running ${TARGET}, no reboot needed"
+  echo "SWITCH_KERNEL_RESULT=no_change"
+else
+  echo "SWITCH_KERNEL_RESULT=reboot_required"
+fi
