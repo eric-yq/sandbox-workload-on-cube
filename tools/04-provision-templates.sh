@@ -63,3 +63,6 @@ state_set TEMPLATES_READY 1
 echo >&2
 log "Next: bash tools/05-run-benchmark.sh            (full suite)"
 log "  or: bash tools/05-run-benchmark.sh B1         (one benchmark)"
+# arl-b9-small is deliberately not built here: at 1 vCPU it needs CubeMaster's
+# snapshot deadline raised for the build, which 06 does and reverts.
+log "  or: bash tools/06-run-b9-hosting.sh --build-template   (B9 hosting mode)"

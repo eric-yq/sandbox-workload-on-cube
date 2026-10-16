@@ -3,6 +3,14 @@
 #
 #   run-bench.sh                 # full suite
 #   run-bench.sh B1 B3           # a subset, in order
+#   run-bench.sh B9-HOSTING      # B9 in the agent-hosting shape
+#
+# B9-HOSTING is a pseudo-target, not a benchmark id: it dispatches to
+# scripts/run-b9-hosting.sh instead of run-single.sh. It lives here rather
+# than in a second remote launcher so the pid/log/rc contract below has
+# exactly one implementation. tools/05-run-benchmark.sh rejects it (its
+# argument validation only accepts real ids); tools/06-run-b9-hosting.sh is
+# what passes it.
 #
 # Exists as a file rather than a command string because building one over
 # ssh does not survive contact with quoting. The previous version passed
@@ -31,7 +39,7 @@ exec > "${LOGFILE}" 2>&1        # everything from here lands in the log
 
 echo "### run-bench.sh starting $(date -Is)"
 echo "### pid=$$  args=${*:-<full suite>}"
-echo "### strategy=${CUBE_STRATEGY:-<from .env>} transport=${CUBE_TRANSPORT:-<from .env>}"
+echo "### mode=${BENCH_MODE:-<from .env>} strategy=${CUBE_STRATEGY:-<from .env>} transport=${CUBE_TRANSPORT:-<from .env>}"
 echo
 
 rc=0
@@ -45,7 +53,14 @@ else
     # run-single.sh takes exactly one benchmark, so a subset is a loop. The
     # first failure stops the run: later benchmarks would measure a platform
     # already in an unknown state.
-    bash scripts/run-single.sh "${bid}" || { rc=$?; echo "### ${bid} FAILED rc=${rc}"; break; }
+    case "${bid}" in
+      B9-HOSTING)
+        bash scripts/run-b9-hosting.sh \
+          || { rc=$?; echo "### ${bid} FAILED rc=${rc}"; break; } ;;
+      *)
+        bash scripts/run-single.sh "${bid}" \
+          || { rc=$?; echo "### ${bid} FAILED rc=${rc}"; break; } ;;
+    esac
   done
 fi
 

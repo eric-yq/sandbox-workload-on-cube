@@ -15,6 +15,18 @@ bash tools/05-run-benchmark.sh         # 跑 benchmark，结果拉回本地
 bash tools/99-teardown.sh              # 销毁（实例 + 两块卷）
 ```
 
+可选：B9 的 **agent hosting** 形态（长驻池子，不是 RL 的每 rollout 一个新沙盒）
+
+```bash
+bash tools/06-run-b9-hosting.sh --build-template   # 一次性，建 arl-b9-small
+bash tools/06-run-b9-hosting.sh                    # 跑扫描，结果拉回本地
+bash tools/06-run-b9-hosting.sh --tail             # 断线后重新接上日志
+```
+
+和 `05` 并列而不是加个 flag，因为两种形态的数**不能放进同一张表**：05 的头条是
+rollouts/sec 且把沙盒 churn 算在测量里，06 的头条是 steps/sec + SLO 密度、供给成本
+单独作为 fixture 报。详见 [RUNBOOK.md → B9 hosting 模式](../RUNBOOK.md#b9-hosting-模式)。
+
 Graviton 机型可选：换内核页大小（只对 arm64 生效）
 
 ```bash
@@ -62,6 +74,7 @@ per-benchmark 的键（`B1_CONCURRENCIES`、`B4_CONCURRENCIES`、`B8_TRIALS`、`
 | `03-setup-env.sh` | 本地 → SSH | rsync repo → 生成 `.env` → `setup-host.sh --skip-templates` | 是 |
 | `04-provision-templates.sh` | 本地 → SSH | `ensure-cube.sh` → `provision-templates.sh` → `smoke_test.py --all` | 是（每次重建模板） |
 | `05-run-benchmark.sh` | 本地 → SSH | `run-suite.sh` 或 `run-single.sh`（nohup，可断开）→ 拉回结果 → 查残留 | 是 |
+| `06-run-b9-hosting.sh` | 本地 → SSH | B9 的 hosting 形态：`--build-template` 建 `arl-b9-small`（临时抬高快照门禁再还原）；不带参数则 `run-b9-hosting.sh`（可断开）→ 拉回结果 → 直接判读 SLO 密度 / 主机占用 / 错误数 | 是 |
 | `98-switch-kernel.sh` | 本地 → SSH | **仅 arm64**：装 `linux-aws-64k`（或 `linux-aws`）→ 钉 GRUB 到精确 menuentry → 重启 → 校验 `getconf PAGESIZE` | 是（已是目标页大小则不动、不重启） |
 | `99-teardown.sh` | 本地 | 销毁实例 + 确认两块卷已删；`--stop` 只停机保留磁盘 | 是 |
 
@@ -192,6 +205,9 @@ gp3 上限：80,000 IOPS（需 ≥160 GiB）、2,000 MiB/s。`m8g.metal-48xl` �
 | 镜像构建 401 / `authorization token has expired` | 没有 IAM instance profile，或 ECR token 过期 | 填 `IAM_INSTANCE_PROFILE`；`provision-templates.sh` 现在会自己取新 token |
 | `create ... is not available locally` | 重启过，模板没了 | `bash tools/04-provision-templates.sh` |
 | 模板构建超时 | 镜像里的服务没在 Cube 固定的 ~30s 探针预算内答 2xx | 看 `/data/log/template/<tid>_0/` 下的构建日志 |
+| `arl-b9-small` 构建报 `context deadline exceeded` / `statuscode:503` | 1 vCPU 的 guest 冷启动五个 stack 超过快照门禁的 30s | 用 `bash tools/06-run-b9-hosting.sh --build-template`，它会临时把 `common_timeout_insec` 抬到 180 再还原 |
+| hosting 跑完主机 CPU 只有个位数，两台机器数字一样 | think time 把步速钉死了，测的是 sleep 不是主机 | 调高 `B9_CONCURRENCIES` 或调低 `THINK_TIME_MS`；06 跑完会直接把这个判读打出来 |
+| hosting 跑出 `rollouts: 79 completed, 9326 errored` | 模板内存不够，B5 的 DuckDB 中途被杀、`:8005` 返 502 | `SANDBOX_MEM_MB_B9S` 必须留在 4096；2048 能构建能 smoke test，但扛不住真实会话 |
 | `02-prepare-disks.sh` 说设备已有文件系统 | 卷上有数据 | 确认要erase 再 `FORCE_MKFS=1 bash tools/02-prepare-disks.sh` |
 | `00-preflight.sh` 报 `no inbound rule permits port 22` | 安全组里没有放行本机的规则（共享的组没有自引用规则，或者工作机不在那个组里） | 给组加一条 22 入站，或把 `SECURITY_GROUP_ID` 指向一个有的组 |
 | `01-create-instance.sh` 警告工作机不是 EC2 实例 | 从笔记本直接跑，读不到 IMDS | 显式填 `SUBNET_ID` + `SECURITY_GROUP_ID`，且该组要放通你的出口 IP |
