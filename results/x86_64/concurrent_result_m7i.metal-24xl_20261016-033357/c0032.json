@@ -1,0 +1,299 @@
+{
+  "benchmark": "B9",
+  "instance": {
+    "instance_type": "m7i.metal-24xl",
+    "instance_id": "i-01ba1ec3886548f06",
+    "region": "us-east-1",
+    "az": "us-east-1c",
+    "arch": "x86_64",
+    "kernel": "7.0.0-1014-aws",
+    "cpu_model": "Intel(R) Xeon(R) Platinum 8488C",
+    "vcpus": 96,
+    "physical_cores": 48,
+    "threads_per_core": 2.0,
+    "smt": true
+  },
+  "concurrency": 32,
+  "duration_sec": 150,
+  "throughput": {
+    "headline": "steps_per_sec",
+    "rollouts_per_sec": 1.4666666666666666,
+    "steps_per_sec": 118.99333333333334,
+    "total_rollouts": 220,
+    "total_steps": 17849
+  },
+  "latency_ms": {
+    "rollout": {
+      "count": 220,
+      "errors": 0,
+      "p50": 26548.499110501325,
+      "p95": 35034.76138415007,
+      "p99": 37610.08402378051,
+      "mean": 26670.729904036347,
+      "max": 42074.78605799952
+    },
+    "per_task": {
+      "B1": {
+        "ops": 3593,
+        "count": 3593,
+        "p50": 17.524664001030033,
+        "p95": 25.037968200194882,
+        "p99": 32.025622360233676,
+        "mean": 19.24021691316909,
+        "max": 62.079727998934686
+      },
+      "B3": {
+        "ops": 8913,
+        "count": 8913,
+        "p50": 13.02653799939435,
+        "p95": 21.180713400099194,
+        "p99": 26.28810152069482,
+        "mean": 14.169631919118096,
+        "max": 67.86715899943374
+      },
+      "B4": {
+        "ops": 1809,
+        "count": 1809,
+        "p50": 608.2741479985998,
+        "p95": 2699.2504659992846,
+        "p99": 3152.2849531206884,
+        "mean": 1053.1250057114405,
+        "max": 3264.716233999934
+      },
+      "B5": {
+        "ops": 1728,
+        "count": 1728,
+        "p50": 92.95367149934464,
+        "p95": 319.65625554876146,
+        "p99": 390.07712825045024,
+        "mean": 137.87755559548032,
+        "max": 503.45355799981917
+      },
+      "B7": {
+        "ops": 1806,
+        "count": 1806,
+        "p50": 2.432562499961932,
+        "p95": 3.0535744995177083,
+        "p99": 9.50532775059401,
+        "mean": 2.5900442697002592,
+        "max": 15.45858700046665
+      }
+    },
+    "sandbox": {
+      "sandbox_create": {
+        "count": 220,
+        "p50": 0.003352500243636314,
+        "p95": 0.008454300223093012,
+        "p99": 0.01068639998266008,
+        "mean": 0.004024249946351946,
+        "max": 0.011374999303370714
+      },
+      "steps": {
+        "count": 220,
+        "p50": 26548.483777999536,
+        "p95": 35034.74462754947,
+        "p99": 37610.067853389686,
+        "mean": 26670.712012768203,
+        "max": 42074.772367999685
+      },
+      "sandbox_release": {
+        "count": 220,
+        "p50": 0.0038034995668567717,
+        "p95": 0.008352799977728862,
+        "p99": 0.012348390446277337,
+        "mean": 0.004566918108718131,
+        "max": 0.023429000066244043
+      }
+    }
+  },
+  "resource": {
+    "cpu_util_avg": 11.785692775469837,
+    "cpu_util_p95": 15.892182006223418,
+    "orch_cpu_util_avg": 0.017888733705772812,
+    "orch_cpu_util_p95": 0.030208333333333334,
+    "mem_peak_gb": 27.895214080810547,
+    "ctx_switch_per_sec_avg": 47312.37333379044,
+    "host_ncpu": 96,
+    "control_plane": {
+      "cgroups": {
+        "cube_api": "/sys/fs/cgroup/system.slice/cube-sandbox-cube-api.service",
+        "cube_master": "/sys/fs/cgroup/system.slice/cube-sandbox-cubemaster.service",
+        "cubelet": "/sys/fs/cgroup/cube_sandbox/cubelet",
+        "cube_ops": "/sys/fs/cgroup/system.slice/cube-sandbox-cubeops.service",
+        "template_center": "/sys/fs/cgroup/system.slice/cube-sandbox-cube-templatecenter.service",
+        "cube_proxy": "/sys/fs/cgroup/system.slice/docker-3f811e3f98f3d6661aa65bb68004f2bb9545512fac4c0f42cd4b316d72282b24.scope",
+        "sandbox_fleet": "/sys/fs/cgroup/cube_sandbox/sandbox,/sys/fs/cgroup/cube_sandbox_v2/sandbox"
+      },
+      "cube_api_cores_avg": 0.00014119075993135978,
+      "cube_api_cores_p95": 0.0008469344916510359,
+      "cube_master_cores_avg": 0.015973903166343287,
+      "cube_master_cores_p95": 0.019370246611173616,
+      "cubelet_cores_avg": 0.03211312352393548,
+      "cubelet_cores_p95": 0.0657171565040478,
+      "cube_ops_cores_avg": 0.0028334317500095987,
+      "cube_ops_cores_p95": 0.00641910785399387,
+      "template_center_cores_avg": 0.002191605562354039,
+      "template_center_cores_p95": 0.002618500564858235,
+      "cube_proxy_cores_avg": 6.156878216959441e-05,
+      "cube_proxy_cores_p95": 7.455019163755188e-05,
+      "sandbox_fleet_cores_avg": 5.91550099165709,
+      "sandbox_fleet_cores_p95": 8.171459917122075,
+      "sandbox_fleet_mem_gb_max": 18.43250274658203,
+      "cubelet_mem_gb_max": 6.516716003417969,
+      "control_plane_cores_p95": 0.09242799565250387,
+      "sandbox_shims_max": 32,
+      "sandbox_shims_avg": 28.497206703910614,
+      "node_id": "172.31.82.2",
+      "node_healthy": true,
+      "node_unhealthy_reason": null,
+      "node_instance_type": "cubebox",
+      "max_sandboxes": 943,
+      "sandbox_count_max": 32,
+      "sandbox_count_avg": 28.88888888888889,
+      "allocated_cpu_milli_max": 32000,
+      "allocated_cpu_milli_avg": 28888.88888888889,
+      "allocated_mem_mb_max": 131072,
+      "allocated_mem_mb_avg": 118328.88888888889,
+      "creates_in_flight_max": 0,
+      "creates_in_flight_avg": 0.0,
+      "allocated_mem_gb_max": 128.0,
+      "create_fails": 0,
+      "control_plane_host_share_p95": 0.001,
+      "cube_proxy_host_share_p95": 0.0,
+      "node_at_sandbox_capacity": false,
+      "control_plane_saturated": false
+    },
+    "disk": {
+      "devices": [
+        "nvme0n1",
+        "nvme1n1"
+      ],
+      "read_mbps_avg": 0.0,
+      "write_mbps_avg": 8.428487933229125,
+      "write_mbps_p95": 36.29731878079795,
+      "iops_avg": 118.23407822794121,
+      "iops_p95": 369.57741485375567,
+      "util_avg": 0.07631860932354757,
+      "util_p95": 0.2531386379463288,
+      "await_ms_avg": 1.1370460458048663,
+      "await_ms_p95": 1.5904635761589403,
+      "queue_depth_avg": 0.15844187942990065,
+      "queue_depth_p95": 0.5642731096916036,
+      "disk_saturated": false,
+      "disk_pressure": false
+    }
+  },
+  "cost": {
+    "instance_hourly_usd": 4.284,
+    "unit": "session",
+    "cost_per_1k_units_usd": 0.8113636363636364,
+    "cost_per_1m_units_usd": 811.3636363636365,
+    "cost_per_1k_steps_usd": 0.010000560255476496,
+    "cost_per_1m_steps_usd": 10.000560255476497
+  },
+  "extra": {
+    "mode": "hosting",
+    "task_mix": {
+      "B3": 0.5,
+      "B1": 0.2,
+      "B5": 0.1,
+      "B4": 0.1,
+      "B7": 0.1
+    },
+    "episode_steps_range": [
+      60,
+      100
+    ],
+    "avg_steps_per_rollout": 81.13,
+    "all_stacks_in_one_sandbox": true,
+    "ops_breakdown": {
+      "B1": 3593,
+      "B3": 8913,
+      "B4": 1809,
+      "B5": 1728,
+      "B7": 1806
+    },
+    "sandbox": {
+      "mode": "hosting",
+      "strategy": "pool",
+      "transport": "cubeproxy/path",
+      "one_sandbox_per_rollout": false,
+      "state_reset_between_rollouts": false,
+      "session_reuse": true,
+      "sandbox_timeout_sec": 3600,
+      "provisioning_share_p50": 0.0,
+      "think_time_ms": 200.0,
+      "think_time_jitter_ms": 50.0,
+      "think_time_pause": false
+    },
+    "pool_fill": {
+      "strategy": "pool",
+      "requested": 32,
+      "created": 32,
+      "failed": 0,
+      "wall_ms": 160.8,
+      "creates_per_sec": 199.0,
+      "create_ms": {
+        "count": 32,
+        "p50": 137.51569649957673,
+        "p95": 155.45970989987836,
+        "p99": 159.38560555063304,
+        "mean": 140.4253210938009,
+        "max": 160.68831700067676
+      }
+    },
+    "slo": {
+      "metric": "p95",
+      "sessions": 32,
+      "steps_per_sec": 118.99333333333334,
+      "steps_per_sec_per_session": 3.7185,
+      "observed_step_ms": {
+        "B1": 25.037968200194882,
+        "B3": 21.180713400099194,
+        "B4": 2699.2504659992846,
+        "B5": 319.65625554876146,
+        "B7": 3.0535744995177083
+      },
+      "budget_ms": {},
+      "degrade_factor": 2.0
+    },
+    "load_gen": {
+      "nprocs": 32,
+      "concurrency_per_proc": [
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1
+      ]
+    }
+  },
+  "timestamp": "20261016-033733"
+}

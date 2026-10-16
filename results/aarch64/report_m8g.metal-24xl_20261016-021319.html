@@ -1,0 +1,83 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<title>Agentic-RL Sandbox Bench - m8g.metal-24xl</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0"></script>
+<style>
+body{font-family:system-ui,sans-serif;max-width:1200px;margin:2rem auto;padding:0 1rem}
+table{border-collapse:collapse;width:100%;margin:1rem 0}
+th,td{border:1px solid #ddd;padding:6px 10px;text-align:right}
+th{background:#f5f5f5}
+h1{font-size:1.4rem} h2{font-size:1.1rem;margin-top:2rem}
+h3{font-size:1rem;margin-top:1rem;color:#444}
+.meta{color:#666;font-size:.9rem}
+</style></head><body>
+<h1>Agentic-RL Sandbox Benchmark <span style="font-weight:400;color:#888">on CubeSandbox</span></h1>
+<p class="meta">
+  Instance: <b>m8g.metal-24xl</b> (aarch64)
+  &middot; Region: us-east-1
+  &middot; Generated: 2026-10-16T01:55:26+0000
+</p>
+<p class="meta">
+  CPU: 96 vCPU / <b>96 physical cores</b>
+  (1.0 threads per core, no SMT)
+  &middot; 0xd4f
+  &middot; kernel 7.0.0-1014-aws
+</p>
+<p class="meta">
+  Sandbox runtime: CubeSandbox (RustVMM/KVM microVM), one sandbox per rollout
+  &middot; strategy: <b>pool</b>
+  &middot; transport: cubeproxy/path
+</p>
+<p class="meta" style="background:#f8f8e8;padding:.6rem;border-left:3px solid #cc0">
+  Read physical cores, not vCPU, when comparing architectures: at the same
+  192 vCPU, m7i/m8i are 96 cores plus SMT while m8g/m9g are 192 real cores.
+  A fleet of hundreds of single-vCPU microVMs is exactly the workload shape
+  where that difference shows up.
+</p>
+<h2>All runs</h2>
+<table>
+<tr><th>Benchmark</th><th>Concurrency</th><th>Throughput</th>
+    <th>P99 (ms)</th><th>CPU avg (%)</th><th>$/1k units</th></tr>
+<tr><td style='text-align:left'>B9<br><span style='color:#888;font-size:.8em'>Concurrent Rollout</span></td><td>8</td><td>0.26 <span style='color:#888;font-size:.85em'>rollouts/s</span></td><td>61448.6</td><td>0.8</td><td>4.1615</td></tr><tr><td style='text-align:left'>B9<br><span style='color:#888;font-size:.8em'>Concurrent Rollout</span></td><td>16</td><td>0.49 <span style='color:#888;font-size:.85em'>rollouts/s</span></td><td>63032.1</td><td>1.3</td><td>2.1509</td></tr><tr><td style='text-align:left'>B9<br><span style='color:#888;font-size:.8em'>Concurrent Rollout</span></td><td>32</td><td>0.94 <span style='color:#888;font-size:.85em'>rollouts/s</span></td><td>61592.4</td><td>2.6</td><td>1.1261</td></tr><tr><td style='text-align:left'>B9<br><span style='color:#888;font-size:.8em'>Concurrent Rollout</span></td><td>48</td><td>1.47 <span style='color:#888;font-size:.85em'>rollouts/s</span></td><td>62601.9</td><td>3.9</td><td>0.7251</td></tr>
+</table>
+<h2>Rollout lifecycle - provisioning vs work</h2><p class='meta'>One microVM per rollout. <code>create</code> is create-until-first-request-accepted, i.e. how long before a trainer can dispatch a tool call. A high provisioning share means the episode is too short to amortise the sandbox.</p><table><tr><th style='text-align:left'>Benchmark</th><th>Concurrency</th><th style='text-align:left'>Strategy</th><th>create p50</th><th>create p99</th><th>steps p50</th><th>release p50</th><th>provisioning share</th></tr><tr><td style='text-align:left'>B9</td><td>8</td><td style='text-align:left'>pool</td><td>0.0</td><td>0.0</td><td>34786.5</td><td>0.0</td><td>0.0%</td></tr><tr><td style='text-align:left'>B9</td><td>16</td><td style='text-align:left'>pool</td><td>0.0</td><td>0.0</td><td>39838.5</td><td>0.0</td><td>0.0%</td></tr><tr><td style='text-align:left'>B9</td><td>32</td><td style='text-align:left'>pool</td><td>0.0</td><td>0.0</td><td>41772.1</td><td>0.0</td><td>0.0%</td></tr><tr><td style='text-align:left'>B9</td><td>48</td><td style='text-align:left'>pool</td><td>0.0</td><td>0.0</td><td>39171.0</td><td>0.0</td><td>0.0%</td></tr></table>
+<h2>Control plane</h2><p class='meta'>CPU cores consumed by CubeSandbox itself, per component. <b>CubeProxy</b> routes every in-sandbox request unless the transport is <code>direct</code>; <b>CubeAPI</b>, <b>CubeMaster</b> and <b>Cubelet</b> sit on the create/delete path. <b>Fleet</b> is the microVMs themselves - that column is supposed to be large. <code>create fails</code> is counted by the load generator, because CubeSandbox exports no such counter.</p><table><tr><th style='text-align:left'>Benchmark</th><th>Concurrency</th><th>CubeProxy cores</th><th>CubeAPI cores</th><th>CubeMaster cores</th><th>Cubelet cores</th><th>ctl share of host</th><th>fleet cores</th><th>sandboxes</th><th>create fails</th><th>verdict</th></tr><tr><td style='text-align:left'>B9</td><td>8</td><td>0.00</td><td>0.00</td><td>0.01</td><td>0.02</td><td>0.1%</td><td>1.02</td><td>8 / 942</td><td>0</td><td><span style='color:#080'>ok</span></td></tr><tr><td style='text-align:left'>B9</td><td>16</td><td>0.00</td><td>0.00</td><td>0.01</td><td>0.02</td><td>0.0%</td><td>1.63</td><td>16 / 942</td><td>0</td><td><span style='color:#080'>ok</span></td></tr><tr><td style='text-align:left'>B9</td><td>32</td><td>0.00</td><td>0.00</td><td>0.02</td><td>0.03</td><td>0.1%</td><td>2.63</td><td>32 / 942</td><td>0</td><td><span style='color:#080'>ok</span></td></tr><tr><td style='text-align:left'>B9</td><td>48</td><td>0.00</td><td>0.00</td><td>0.02</td><td>0.04</td><td>0.1%</td><td>3.88</td><td>48 / 942</td><td>0</td><td><span style='color:#080'>ok</span></td></tr></table>
+<h2>Disk (EBS)</h2><p class='meta'>No target metal instance type has instance store, so all sandbox I/O lands on the EBS volume behind <code>/data/cubelet</code>. Reads should be near zero after warmup: sandboxes restore from a per-node memory snapshot through reflink copy-on-write, so an untouched page is shared rather than re-read. Writes are per-rollout lifecycle churn - a CoW upper layer, a shim log and a snapshot pack created and destroyed for every rollout - which makes the load IOPS-shaped rather than bandwidth-shaped.</p><p class='meta'><b>Read <code>await</code>, not <code>util</code>.</b> For a network-attached volume, util only means "at least one I/O in flight" and can sit high while far from the provisioned limit (measured: 43-56% util at ~740 IOPS on a 10,000 IOPS gp3). EBS throttles by queueing, so rising service time with flat throughput is the real signal. gp3 normally serves in ~1 ms.</p><table><tr><th style='text-align:left'>Benchmark</th><th>Concurrency</th><th style='text-align:left'>Device</th><th>IOPS avg</th><th>IOPS p95</th><th>read MB/s</th><th>write MB/s</th><th>await p95 (ms)</th><th>queue p95</th><th>util p95</th><th>verdict</th></tr><tr><td style='text-align:left'>B9</td><td>8</td><td style='text-align:left'>nvme0n1,nvme1n1</td><td>63</td><td>180</td><td>0.0</td><td>2.4</td><td>1.39</td><td>0.2</td><td>6%</td><td><span style='color:#080'>ok</span></td></tr><tr><td style='text-align:left'>B9</td><td>16</td><td style='text-align:left'>nvme0n1,nvme1n1</td><td>74</td><td>246</td><td>0.0</td><td>3.5</td><td>1.48</td><td>0.3</td><td>8%</td><td><span style='color:#080'>ok</span></td></tr><tr><td style='text-align:left'>B9</td><td>32</td><td style='text-align:left'>nvme0n1,nvme1n1</td><td>98</td><td>305</td><td>0.0</td><td>6.0</td><td>1.50</td><td>0.4</td><td>12%</td><td><span style='color:#080'>ok</span></td></tr><tr><td style='text-align:left'>B9</td><td>48</td><td style='text-align:left'>nvme0n1,nvme1n1</td><td>131</td><td>369</td><td>0.1</td><td>9.3</td><td>1.54</td><td>0.5</td><td>20%</td><td><span style='color:#080'>ok</span></td></tr></table>
+<h2>B9 - per-task latency &amp; ops mix</h2>
+<h3 style='font-size:1rem;margin-top:1rem'>c=8 &middot; avg steps/rollout=19.13</h3>
+<table>
+<tr><th style='text-align:left'>Sub-task</th><th>weight</th><th>ops</th><th>count</th><th>p50 (ms)</th><th>p95 (ms)</th><th>p99 (ms)</th><th>mean (ms)</th><th>max (ms)</th></tr>
+<tr><td style='text-align:left'>B1 <span style='color:#888;font-size:.85em'>Code Execution</span></td><td>0.20</td><td>175</td><td>175</td><td>12.9</td><td>21.3</td><td>35.6</td><td>14.0</td><td>36.5</td></tr>
+<tr><td style='text-align:left'>B3 <span style='color:#888;font-size:.85em'>Tool Call</span></td><td>0.50</td><td>429</td><td>429</td><td>9.3</td><td>15.4</td><td>16.7</td><td>10.4</td><td>19.5</td></tr>
+<tr><td style='text-align:left'>B4 <span style='color:#888;font-size:.85em'>Browser</span></td><td>0.10</td><td>87</td><td>87</td><td>580.5</td><td>2681.6</td><td>3105.8</td><td>945.0</td><td>3111.4</td></tr>
+<tr><td style='text-align:left'>B5 <span style='color:#888;font-size:.85em'>SQL Exec (TPC-H)</span></td><td>0.10</td><td>104</td><td>104</td><td>41.7</td><td>119.8</td><td>180.5</td><td>54.6</td><td>211.1</td></tr>
+<tr><td style='text-align:left'>B7 <span style='color:#888;font-size:.85em'>Text Game</span></td><td>0.10</td><td>85</td><td>85</td><td>2.0</td><td>8.1</td><td>8.5</td><td>2.5</td><td>8.6</td></tr>
+</table>
+<h3 style='font-size:1rem;margin-top:1rem'>c=16 &middot; avg steps/rollout=20.18</h3>
+<table>
+<tr><th style='text-align:left'>Sub-task</th><th>weight</th><th>ops</th><th>count</th><th>p50 (ms)</th><th>p95 (ms)</th><th>p99 (ms)</th><th>mean (ms)</th><th>max (ms)</th></tr>
+<tr><td style='text-align:left'>B1 <span style='color:#888;font-size:.85em'>Code Execution</span></td><td>0.20</td><td>355</td><td>355</td><td>12.9</td><td>21.7</td><td>29.1</td><td>14.9</td><td>154.6</td></tr>
+<tr><td style='text-align:left'>B3 <span style='color:#888;font-size:.85em'>Tool Call</span></td><td>0.50</td><td>923</td><td>923</td><td>9.5</td><td>15.2</td><td>16.5</td><td>10.5</td><td>44.2</td></tr>
+<tr><td style='text-align:left'>B4 <span style='color:#888;font-size:.85em'>Browser</span></td><td>0.10</td><td>183</td><td>183</td><td>438.2</td><td>2619.2</td><td>3107.1</td><td>857.4</td><td>3117.1</td></tr>
+<tr><td style='text-align:left'>B5 <span style='color:#888;font-size:.85em'>SQL Exec (TPC-H)</span></td><td>0.10</td><td>152</td><td>152</td><td>34.4</td><td>139.6</td><td>178.9</td><td>52.7</td><td>201.7</td></tr>
+<tr><td style='text-align:left'>B7 <span style='color:#888;font-size:.85em'>Text Game</span></td><td>0.10</td><td>183</td><td>183</td><td>2.0</td><td>8.1</td><td>8.4</td><td>2.5</td><td>9.4</td></tr>
+</table>
+<h3 style='font-size:1rem;margin-top:1rem'>c=32 &middot; avg steps/rollout=20.75</h3>
+<table>
+<tr><th style='text-align:left'>Sub-task</th><th>weight</th><th>ops</th><th>count</th><th>p50 (ms)</th><th>p95 (ms)</th><th>p99 (ms)</th><th>mean (ms)</th><th>max (ms)</th></tr>
+<tr><td style='text-align:left'>B1 <span style='color:#888;font-size:.85em'>Code Execution</span></td><td>0.20</td><td>710</td><td>710</td><td>13.1</td><td>22.7</td><td>31.3</td><td>22.4</td><td>2669.5</td></tr>
+<tr><td style='text-align:left'>B3 <span style='color:#888;font-size:.85em'>Tool Call</span></td><td>0.50</td><td>1790</td><td>1790</td><td>9.7</td><td>15.6</td><td>17.1</td><td>10.7</td><td>28.3</td></tr>
+<tr><td style='text-align:left'>B4 <span style='color:#888;font-size:.85em'>Browser</span></td><td>0.10</td><td>323</td><td>323</td><td>560.6</td><td>2650.8</td><td>3111.7</td><td>965.2</td><td>3190.0</td></tr>
+<tr><td style='text-align:left'>B5 <span style='color:#888;font-size:.85em'>SQL Exec (TPC-H)</span></td><td>0.10</td><td>348</td><td>348</td><td>32.2</td><td>134.5</td><td>178.6</td><td>50.9</td><td>220.0</td></tr>
+<tr><td style='text-align:left'>B7 <span style='color:#888;font-size:.85em'>Text Game</span></td><td>0.10</td><td>356</td><td>356</td><td>2.1</td><td>8.3</td><td>9.1</td><td>2.6</td><td>10.2</td></tr>
+</table>
+<h3 style='font-size:1rem;margin-top:1rem'>c=48 &middot; avg steps/rollout=19.92</h3>
+<table>
+<tr><th style='text-align:left'>Sub-task</th><th>weight</th><th>ops</th><th>count</th><th>p50 (ms)</th><th>p95 (ms)</th><th>p99 (ms)</th><th>mean (ms)</th><th>max (ms)</th></tr>
+<tr><td style='text-align:left'>B1 <span style='color:#888;font-size:.85em'>Code Execution</span></td><td>0.20</td><td>1093</td><td>1093</td><td>13.2</td><td>22.7</td><td>31.1</td><td>17.3</td><td>2675.4</td></tr>
+<tr><td style='text-align:left'>B3 <span style='color:#888;font-size:.85em'>Tool Call</span></td><td>0.50</td><td>2619</td><td>2619</td><td>10.2</td><td>16.0</td><td>19.9</td><td>11.2</td><td>38.5</td></tr>
+<tr><td style='text-align:left'>B4 <span style='color:#888;font-size:.85em'>Browser</span></td><td>0.10</td><td>496</td><td>496</td><td>581.0</td><td>2657.0</td><td>3116.1</td><td>969.8</td><td>3189.3</td></tr>
+<tr><td style='text-align:left'>B5 <span style='color:#888;font-size:.85em'>SQL Exec (TPC-H)</span></td><td>0.10</td><td>504</td><td>504</td><td>34.1</td><td>131.3</td><td>188.6</td><td>54.5</td><td>220.6</td></tr>
+<tr><td style='text-align:left'>B7 <span style='color:#888;font-size:.85em'>Text Game</span></td><td>0.10</td><td>548</td><td>548</td><td>2.1</td><td>8.5</td><td>9.2</td><td>2.6</td><td>11.2</td></tr>
+</table>
+</body></html>

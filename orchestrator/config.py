@@ -199,6 +199,58 @@ class Config:
     b7_episodes_per_rollout: int = field(
         default_factory=lambda: _env_int("B7_EPISODES_PER_ROLLOUT", 1)
     )
+    # B9 session length, in steps. The RL default (10-30) is a training
+    # mini-episode. An *agent hosting* session is two orders of magnitude
+    # longer - a coding agent runs for hours - and the difference is not
+    # cosmetic: at 20 steps a `fresh` rollout spends ~15% of its wall time
+    # provisioning, which is what makes B9's headline number a measure of
+    # the create path rather than of the work. These were module constants
+    # in b9_concurrent.py until it turned out that the one axis separating
+    # the two archetypes was the one axis that could not be set.
+    b9_episode_min_steps: int = field(
+        default_factory=lambda: _env_int("B9_EPISODE_MIN_STEPS", 10)
+    )
+    b9_episode_max_steps: int = field(
+        default_factory=lambda: _env_int("B9_EPISODE_MAX_STEPS", 30)
+    )
+
+    # ---------------- archetype label ----------------
+    # `rl`: a trainer dispatching short rollouts, each in its own fresh
+    # sandbox. Churn is part of the workload and sandbox state must not
+    # survive a rollout.
+    # `hosting`: a long-lived pool of sandboxes, each holding one agent
+    # session. Provisioning is a one-off fixture and state carry-over
+    # between steps is the product, not a leak.
+    # Only affects labelling and which SLO view the report builds; the
+    # mechanics come from CUBE_STRATEGY / THINK_TIME_MS / B9_EPISODE_*.
+    bench_mode: str = field(
+        default_factory=lambda: os.getenv("BENCH_MODE", "rl").strip().lower()
+    )
+
+    # ---------------- SLO density ----------------
+    # Hosting capacity is "how many sessions fit before steps get slow",
+    # so the headline is a session count at a latency budget, not a
+    # throughput number. Budgets are per-stack because B9's step mix spans
+    # two orders of magnitude (B7 ~2ms, B4 ~600ms) - a single ms budget
+    # across all of them would be meaningless.
+    #
+    # Default budget is relative: a stack passes while its step p95 stays
+    # within SLO_DEGRADE_FACTOR of the same stack's p95 at the *lowest*
+    # concurrency in the sweep. That self-calibrates per instance and
+    # needs no magic constants, which matters when the whole point is
+    # comparing two different CPUs.
+    slo_degrade_factor: float = field(
+        default_factory=lambda: _env_float("SLO_DEGRADE_FACTOR", 2.0)
+    )
+    # Absolute override, e.g. `SLO_STEP_P95_MS=b1=40,b3=25`. Any stack
+    # listed here is judged against the fixed budget instead of the
+    # relative one. Use it when you have a real product SLO to hold to.
+    slo_step_p95_ms: dict[str, float] = field(
+        default_factory=lambda: _kv_float(os.getenv("SLO_STEP_P95_MS", ""))
+    )
+    slo_metric: str = field(
+        default_factory=lambda: os.getenv("SLO_METRIC", "p95").strip().lower()
+    )
 
     # ---------------- simulated policy think time ----------------
     think_time_ms: float = field(default_factory=lambda: _env_float("THINK_TIME_MS", 0.0))
@@ -277,6 +329,24 @@ class Config:
         if bid == "B9":
             return self.b9_duration_sec
         return self.duration_sec
+
+    def b9_episode_range(self) -> tuple[int, int]:
+        """(min, max) steps per B9 session, clamped to a sane ordering.
+
+        A swapped pair (max < min) would make `random.randint` raise
+        inside every load-generator child at once, which surfaces as
+        "every rollout errored" rather than as a bad setting.
+        """
+        lo = max(1, self.b9_episode_min_steps)
+        hi = max(lo, self.b9_episode_max_steps)
+        return lo, hi
+
+    def is_hosting(self) -> bool:
+        return self.bench_mode == "hosting"
+
+    def slo_budget_for(self, stack: str) -> float | None:
+        """Absolute step-latency budget in ms for `stack`, if one is set."""
+        return self.slo_step_p95_ms.get((stack or "").strip().lower())
 
     def price_for(self, instance_type: str) -> float:
         """Exact-match price lookup: overrides, then built-in table."""

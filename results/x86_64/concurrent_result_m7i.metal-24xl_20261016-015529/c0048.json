@@ -1,0 +1,276 @@
+{
+  "benchmark": "B9",
+  "instance": {
+    "instance_type": "m7i.metal-24xl",
+    "instance_id": "i-01ba1ec3886548f06",
+    "region": "us-east-1",
+    "az": "us-east-1c",
+    "arch": "x86_64",
+    "kernel": "7.0.0-1014-aws",
+    "cpu_model": "Intel(R) Xeon(R) Platinum 8488C",
+    "vcpus": 96,
+    "physical_cores": 48,
+    "threads_per_core": 2.0,
+    "smt": true
+  },
+  "concurrency": 48,
+  "duration_sec": 180,
+  "throughput": {
+    "rollouts_per_sec": 1.4666666666666666,
+    "steps_per_sec": 29.22222222222222,
+    "total_rollouts": 264,
+    "total_steps": 5260
+  },
+  "latency_ms": {
+    "rollout": {
+      "count": 264,
+      "errors": 0,
+      "p50": 39245.232129000666,
+      "p95": 60470.18627179977,
+      "p99": 62711.372033760366,
+      "mean": 40046.75865995457,
+      "max": 65260.22004199967
+    },
+    "per_task": {
+      "B1": {
+        "ops": 1093,
+        "count": 1093,
+        "p50": 17.74651800042193,
+        "p95": 29.538656799741133,
+        "p99": 41.93024075972053,
+        "mean": 21.801039881985876,
+        "max": 2293.260960000225
+      },
+      "B3": {
+        "ops": 2619,
+        "count": 2619,
+        "p50": 12.9318899998907,
+        "p95": 20.503278400065028,
+        "p99": 23.61688883980605,
+        "mean": 13.919721845357003,
+        "max": 35.02248399945529
+      },
+      "B4": {
+        "ops": 496,
+        "count": 496,
+        "p50": 619.2071945001771,
+        "p95": 2659.627122000302,
+        "p99": 3115.3123746496476,
+        "mean": 976.4873109596546,
+        "max": 3194.2782199994326
+      },
+      "B5": {
+        "ops": 504,
+        "count": 504,
+        "p50": 46.91537300004711,
+        "p95": 170.52531390004333,
+        "p99": 224.34302445048147,
+        "mean": 68.51166864284536,
+        "max": 268.83120799993776
+      },
+      "B7": {
+        "ops": 548,
+        "count": 548,
+        "p50": 2.6083480001943826,
+        "p95": 10.41379035036698,
+        "p99": 11.57668748004653,
+        "mean": 3.314586255482671,
+        "max": 17.5273949998882
+      }
+    },
+    "sandbox": {
+      "sandbox_create": {
+        "count": 264,
+        "p50": 0.00353599989466602,
+        "p95": 0.008648599487059982,
+        "p99": 0.00960847977694357,
+        "mean": 0.004473492381431711,
+        "max": 0.010146000022359658
+      },
+      "steps": {
+        "count": 264,
+        "p50": 39245.2139285001,
+        "p95": 60470.16849065035,
+        "p99": 62711.34496571019,
+        "mean": 40046.739601867404,
+        "max": 65260.20603300003
+      },
+      "sandbox_release": {
+        "count": 264,
+        "p50": 0.003986499905295204,
+        "p95": 0.00848399986352888,
+        "p99": 0.009165880264845327,
+        "mean": 0.004772761371896195,
+        "max": 0.010538999958953355
+      }
+    }
+  },
+  "resource": {
+    "cpu_util_avg": 3.86665096431915,
+    "cpu_util_p95": 6.972050968117986,
+    "orch_cpu_util_avg": 0.025009177679882526,
+    "orch_cpu_util_p95": 0.030208333333333334,
+    "mem_peak_gb": 27.97602081298828,
+    "ctx_switch_per_sec_avg": 38592.32164827098,
+    "host_ncpu": 96,
+    "control_plane": {
+      "cgroups": {
+        "cube_api": "/sys/fs/cgroup/system.slice/cube-sandbox-cube-api.service",
+        "cube_master": "/sys/fs/cgroup/system.slice/cube-sandbox-cubemaster.service",
+        "cubelet": "/sys/fs/cgroup/cube_sandbox/cubelet",
+        "cube_ops": "/sys/fs/cgroup/system.slice/cube-sandbox-cubeops.service",
+        "template_center": "/sys/fs/cgroup/system.slice/cube-sandbox-cube-templatecenter.service",
+        "cube_proxy": "/sys/fs/cgroup/system.slice/docker-3f811e3f98f3d6661aa65bb68004f2bb9545512fac4c0f42cd4b316d72282b24.scope",
+        "sandbox_fleet": "/sys/fs/cgroup/cube_sandbox/sandbox,/sys/fs/cgroup/cube_sandbox_v2/sandbox"
+      },
+      "cube_api_cores_avg": 0.0001632076237177207,
+      "cube_api_cores_p95": 0.0010981042438853604,
+      "cube_master_cores_avg": 0.015106351519408957,
+      "cube_master_cores_p95": 0.018008348360667375,
+      "cubelet_cores_avg": 0.023042591520022002,
+      "cubelet_cores_p95": 0.058044378217905146,
+      "cube_ops_cores_avg": 0.002771642463337594,
+      "cube_ops_cores_p95": 0.006448548247711974,
+      "template_center_cores_avg": 0.001784097610488386,
+      "template_center_cores_p95": 0.002076952143373404,
+      "cube_proxy_cores_avg": 5.8152002263617545e-05,
+      "cube_proxy_cores_p95": 6.871628467073792e-05,
+      "sandbox_fleet_cores_avg": 2.1259160408575273,
+      "sandbox_fleet_cores_p95": 3.667029829012185,
+      "sandbox_fleet_mem_gb_max": 14.977256774902344,
+      "cubelet_mem_gb_max": 4.700336456298828,
+      "control_plane_cores_p95": 0.0836680953548406,
+      "sandbox_shims_max": 48,
+      "sandbox_shims_avg": 40.31277533039648,
+      "node_id": "172.31.82.2",
+      "node_healthy": true,
+      "node_unhealthy_reason": null,
+      "node_instance_type": "cubebox",
+      "max_sandboxes": 943,
+      "sandbox_count_max": 48,
+      "sandbox_count_avg": 40.34782608695652,
+      "allocated_cpu_milli_max": 192000,
+      "allocated_cpu_milli_avg": 161391.30434782608,
+      "allocated_mem_mb_max": 196608,
+      "allocated_mem_mb_avg": 165264.69565217392,
+      "creates_in_flight_max": 0,
+      "creates_in_flight_avg": 0.0,
+      "allocated_mem_gb_max": 192.0,
+      "create_fails": 0,
+      "control_plane_host_share_p95": 0.0009,
+      "cube_proxy_host_share_p95": 0.0,
+      "node_at_sandbox_capacity": false,
+      "control_plane_saturated": false
+    },
+    "disk": {
+      "devices": [
+        "nvme0n1",
+        "nvme1n1"
+      ],
+      "read_mbps_avg": 1.756867744572749e-05,
+      "write_mbps_avg": 9.387552694689006,
+      "write_mbps_p95": 41.435841144033525,
+      "iops_avg": 127.5833772491438,
+      "iops_p95": 409.09015931226696,
+      "util_avg": 0.06154246120305496,
+      "util_p95": 0.15481651558232765,
+      "await_ms_avg": 1.1438486402020338,
+      "await_ms_p95": 1.5557101391252126,
+      "queue_depth_avg": 0.170973952419551,
+      "queue_depth_p95": 0.6142285748732825,
+      "disk_saturated": false,
+      "disk_pressure": false
+    }
+  },
+  "cost": {
+    "instance_hourly_usd": 4.284,
+    "cost_per_1k_units_usd": 0.8113636363636363,
+    "cost_per_1m_units_usd": 811.3636363636364
+  },
+  "extra": {
+    "task_mix": {
+      "B3": 0.5,
+      "B1": 0.2,
+      "B5": 0.1,
+      "B4": 0.1,
+      "B7": 0.1
+    },
+    "episode_steps_range": [
+      10,
+      30
+    ],
+    "avg_steps_per_rollout": 19.92,
+    "all_stacks_in_one_sandbox": true,
+    "ops_breakdown": {
+      "B1": 1093,
+      "B3": 2619,
+      "B4": 496,
+      "B5": 504,
+      "B7": 548
+    },
+    "sandbox": {
+      "strategy": "pool",
+      "transport": "cubeproxy/path",
+      "one_sandbox_per_rollout": false,
+      "state_reset_between_rollouts": false,
+      "sandbox_timeout_sec": 3600,
+      "provisioning_share_p50": 0.0,
+      "think_time_ms": 2000.0,
+      "think_time_pause": false
+    },
+    "load_gen": {
+      "nprocs": 48,
+      "concurrency_per_proc": [
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1
+      ]
+    }
+  },
+  "timestamp": "20261016-021316"
+}

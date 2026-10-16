@@ -1,9 +1,8 @@
 """B9 - End-to-end concurrent rollouts, one microVM per rollout.
 
-This is the archetype the whole suite exists to measure: an RL trainer
-dispatching many rollouts in parallel to a sandbox tier. Each rollout is a
-10-30 step mini-episode where every step is sampled from a weighted task
-mix:
+This is the archetype the whole suite exists to measure: many concurrent
+sessions against one sandbox tier, where every step is sampled from a
+weighted task mix:
 
     B3 (tool-call step)          weight 0.50
     B1 (python code execution)   weight 0.20
@@ -17,6 +16,31 @@ exactly like a synchronous RL batch waiting on its slowest environment.
 B4 contributes a disproportionate tail because its step latency is one to
 two orders of magnitude above the others, so it dominates p99 even at 10%
 weight.
+
+Two archetypes, one mechanism
+-----------------------------
+The same task mix models both workloads that run on a sandbox tier, and
+`BENCH_MODE` says which one a run is claiming to be:
+
+* `rl` (default) - a trainer dispatching short rollouts, each in its own
+  fresh sandbox. `CUBE_STRATEGY=fresh`, 10-30 steps, no think time.
+  Sandbox churn is part of the workload, so create latency belongs in
+  the headline. Expect provisioning to be ~15% of rollout wall time.
+* `hosting` - a long-lived pool, one agent session per sandbox.
+  `CUBE_STRATEGY=pool`, hundreds of steps, non-zero `THINK_TIME_MS`.
+  Provisioning is a one-off fixture (reported separately as
+  `extra.pool_fill`) and state carry-over between steps is the product
+  rather than contamination.
+
+The trap in the hosting shape is the think-time ceiling. A closed-loop
+session cannot step faster than `1/think_time`, so once sessions x
+think-time saturates before the *host* does, throughput collapses to
+`concurrency / think_time` - identical on any two machines, at a few
+percent CPU. `run_one` logs that ceiling next to the measured rate so a
+think-time-bound run is recognisable rather than publishable. The way out
+is more sessions per host, which is why the small 1 vCPU B9 template
+exists: the node admits `QuotaCpu / template_cpu` sandboxes, so a 4 vCPU
+template caps a 192k-millicore node at 48.
 
 Why one sandbox holds all five stacks
 -------------------------------------
@@ -69,9 +93,11 @@ from .base import (
     cost_block,
     fold_create_fails,
     load_gen_block,
+    pool_fill_block,
     sandbox_extra_block,
     sandbox_latency_block,
     schedule_sampler_reset,
+    slo_block,
 )
 from .multiproc import drive_load_mp
 
@@ -89,8 +115,18 @@ TASK_MIX = [
     ("B7", 0.10),   # ~5-50ms per episode
 ]
 
-EPISODE_MIN_STEPS = 10
-EPISODE_MAX_STEPS = 30
+# Session length in steps, overridable via B9_EPISODE_MIN_STEPS /
+# B9_EPISODE_MAX_STEPS. These defaults are an RL training mini-episode.
+#
+# This is the single axis that separates the two archetypes B9 can model,
+# so it has to be settable: at ~20 steps a `fresh` rollout spends ~15% of
+# its wall time on create+release, and B9's headline throughput is then
+# substantially a measure of the create path. A hosted agent session is
+# hundreds of steps long, which amortises provisioning to near zero and
+# leaves the step work as the signal. Running one shape and reporting it
+# as the other is the mistake these two knobs exist to prevent.
+DEFAULT_EPISODE_MIN_STEPS = 10
+DEFAULT_EPISODE_MAX_STEPS = 30
 
 TPCH_QUERIES = list(range(1, 23))
 
@@ -111,6 +147,9 @@ async def _b9_factory(*, setup: dict, seed_base: int, concurrency: int):
     client, provider, timer = await build_provider(
         setup, concurrency=concurrency, ready_port=PORT_B3,
     )
+
+    ep_min = int(setup.get("episode_min_steps", DEFAULT_EPISODE_MIN_STEPS))
+    ep_max = int(setup.get("episode_max_steps", DEFAULT_EPISODE_MAX_STEPS))
 
     b1_corpus = setup["b1_corpus"]
     b3_trajs = setup["b3_trajectories"]
@@ -202,7 +241,7 @@ async def _b9_factory(*, setup: dict, seed_base: int, concurrency: int):
         t_all = time.perf_counter()
         ref, create_ms = await provider.acquire()
         idle_ms = 0.0
-        n_steps = rng.randint(EPISODE_MIN_STEPS, EPISODE_MAX_STEPS)
+        n_steps = rng.randint(ep_min, ep_max)
         counters = {
             "steps_total": 0,
             "ops_B1": 0, "ops_B3": 0, "ops_B4": 0, "ops_B5": 0, "ops_B7": 0,
@@ -242,7 +281,11 @@ async def _b9_factory(*, setup: dict, seed_base: int, concurrency: int):
         await provider.stop()
         await client.aclose()
 
-    return work_fn, teardown
+    # Third element: fixture measurements taken before the clock started.
+    # `provider.start()` already ran inside build_provider, so fill_stats
+    # is populated here for the pre-creating strategies and None for
+    # `fresh` (where every create is already counted per rollout).
+    return work_fn, teardown, {"pool_fill": provider.fill_stats}
 
 
 class B9Runner(Runner):
@@ -316,12 +359,30 @@ class B9Runner(Runner):
         duration = cfg.b9_duration_sec or cfg.duration_sec
         reset_task = schedule_sampler_reset(sampler, cfg.warmup_sec, name=self.name)
 
+        ep_min, ep_max = cfg.b9_episode_range()
         setup = dict(self._setup)
         setup["cube"] = cfg.cube_setup()
         setup["template_id"] = self._template_id or cfg.template_b9
+        setup["episode_min_steps"] = ep_min
+        setup["episode_max_steps"] = ep_max
 
-        log.info("[B9] warmup=%ds + measure=%ds @ %d live sandboxes",
-                 cfg.warmup_sec, duration, concurrency)
+        log.info("[B9] mode=%s warmup=%ds + measure=%ds @ %d live sandboxes, "
+                 "%d-%d steps/session, strategy=%s, think=%.0fms",
+                 cfg.bench_mode, cfg.warmup_sec, duration, concurrency,
+                 ep_min, ep_max, cfg.cube_strategy, cfg.think_time_ms)
+        if cfg.think_time_ms > 0:
+            # A closed-loop session spends think_time between steps, so
+            # its step rate cannot exceed 1/think_time no matter how fast
+            # the host is. When that ceiling binds, throughput is pure
+            # arithmetic (concurrency / think_time) and comes out
+            # identical on any two machines - which looks like a result
+            # and is not one.
+            ceiling = concurrency / (cfg.think_time_ms / 1000.0)
+            log.info("[B9] think-time step-rate ceiling at this level: "
+                     "%.1f steps/s (%d sessions / %.0fms). If the measured "
+                     "rate lands near it, the run is think-time bound and "
+                     "says nothing about the host; lower THINK_TIME_MS or "
+                     "raise concurrency.", ceiling, concurrency, cfg.think_time_ms)
 
         try:
             mp_result = await drive_load_mp(
@@ -351,6 +412,7 @@ class B9Runner(Runner):
         counters = mp_result["counters"]
         steps_total = int(counters.get("steps_total", 0))
         rollouts_per_sec = rollouts / duration
+        steps_per_sec = steps_total / duration
 
         per_task = {}
         for tname in ("B1", "B3", "B4", "B5", "B7"):
@@ -367,8 +429,14 @@ class B9Runner(Runner):
             concurrency=concurrency,
             duration_sec=duration,
             throughput={
+                # Under `hosting` a "rollout" is a whole agent session,
+                # so sessions/sec is a function of session length and
+                # think time rather than of the machine. `steps_per_sec`
+                # is the unit that stays comparable across both shapes,
+                # and `headline` names which one to read.
+                "headline": "steps_per_sec" if cfg.is_hosting() else "rollouts_per_sec",
                 "rollouts_per_sec": rollouts_per_sec,
-                "steps_per_sec": steps_total / duration,
+                "steps_per_sec": steps_per_sec,
                 "total_rollouts": rollouts,
                 "total_steps": steps_total,
             },
@@ -380,10 +448,13 @@ class B9Runner(Runner):
             resource=res,
             cost=cost_block(
                 rollouts_per_sec, duration, instance["instance_type"], cfg,
+                unit="session" if cfg.is_hosting() else "rollout",
+                secondary_units={"step": steps_per_sec},
             ),
             extra={
+                "mode": cfg.bench_mode,
                 "task_mix": dict(TASK_MIX),
-                "episode_steps_range": [EPISODE_MIN_STEPS, EPISODE_MAX_STEPS],
+                "episode_steps_range": [ep_min, ep_max],
                 "avg_steps_per_rollout": round(steps_total / rollouts, 2) if rollouts else 0.0,
                 "all_stacks_in_one_sandbox": True,
                 "ops_breakdown": {
@@ -391,6 +462,8 @@ class B9Runner(Runner):
                     for t in ("B1", "B3", "B4", "B5", "B7")
                 },
                 "sandbox": sandbox_extra_block(cfg, mp_result),
+                "pool_fill": pool_fill_block(mp_result),
+                "slo": slo_block(cfg, per_task, concurrency, steps_per_sec),
                 "load_gen": load_gen_block(mp_result),
             },
         )

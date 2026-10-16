@@ -1,0 +1,44 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<title>Agentic-RL Sandbox Bench - m7i.metal-24xl</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0"></script>
+<style>
+body{font-family:system-ui,sans-serif;max-width:1200px;margin:2rem auto;padding:0 1rem}
+table{border-collapse:collapse;width:100%;margin:1rem 0}
+th,td{border:1px solid #ddd;padding:6px 10px;text-align:right}
+th{background:#f5f5f5}
+h1{font-size:1.4rem} h2{font-size:1.1rem;margin-top:2rem}
+h3{font-size:1rem;margin-top:1rem;color:#444}
+.meta{color:#666;font-size:.9rem}
+</style></head><body>
+<h1>Agentic-RL Sandbox Benchmark <span style="font-weight:400;color:#888">on CubeSandbox</span></h1>
+<p class="meta">
+  Instance: <b>m7i.metal-24xl</b> (x86_64)
+  &middot; Region: us-east-1
+  &middot; Generated: 2026-10-16T03:50:30+0000
+</p>
+<p class="meta">
+  CPU: 96 vCPU / <b>48 physical cores</b>
+  (2.0 threads per core, SMT)
+  &middot; Intel(R) Xeon(R) Platinum 8488C
+  &middot; kernel 7.0.0-1014-aws
+</p>
+<p class="meta">
+  Sandbox runtime: CubeSandbox (RustVMM/KVM microVM), one sandbox per rollout
+  &middot; strategy: <b>fresh</b>
+  &middot; transport: cubeproxy/path
+</p>
+<p class="meta" style="background:#f8f8e8;padding:.6rem;border-left:3px solid #cc0">
+  Read physical cores, not vCPU, when comparing architectures: at the same
+  192 vCPU, m7i/m8i are 96 cores plus SMT while m8g/m9g are 192 real cores.
+  A fleet of hundreds of single-vCPU microVMs is exactly the workload shape
+  where that difference shows up.
+</p>
+<h2>All runs</h2>
+<table>
+<tr><th>Benchmark</th><th>Concurrency</th><th>Throughput</th>
+    <th>P99 (ms)</th><th>CPU avg (%)</th><th>$/1k units</th></tr>
+
+</table>
+
+</body></html>

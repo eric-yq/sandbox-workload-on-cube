@@ -152,6 +152,12 @@ class SandboxProvider:
         # round-trip latency, since Cube has no batched clone call.
         self._clone_batch = max(1, min(clone_batch, 64))
         self._started = False
+        # Set by start() for the pre-creating strategies. Surfaced in the
+        # result blob as `extra.pool_fill`: standing the fleet up is a
+        # real hosting metric (scale-out latency), and it used to be
+        # thrown away purely because it happens outside the measured
+        # window. See base.pool_fill_block.
+        self.fill_stats: Optional[dict] = None
 
     # ---------------- setup / teardown ----------------
     async def start(self) -> None:
@@ -167,15 +173,33 @@ class SandboxProvider:
 
         if self.strategy in ("pool", "rollback"):
             self._pool = asyncio.Queue()
+            create_ms: list[float] = []
+
+            async def _timed_create() -> SandboxRef:
+                t0 = time.perf_counter()
+                ref = await self._create()
+                create_ms.append((time.perf_counter() - t0) * 1000.0)
+                return ref
+
+            t_fill = time.perf_counter()
             refs = await asyncio.gather(
-                *[self._create() for _ in range(self.pool_size)],
+                *[_timed_create() for _ in range(self.pool_size)],
                 return_exceptions=True,
             )
+            fill_wall_ms = (time.perf_counter() - t_fill) * 1000.0
             ok = 0
             for r in refs:
                 if isinstance(r, SandboxRef):
                     self._pool.put_nowait(r)
                     ok += 1
+            self.fill_stats = {
+                "strategy": self.strategy,
+                "requested": self.pool_size,
+                "created": ok,
+                "failed": self.pool_size - ok,
+                "wall_ms": fill_wall_ms,
+                "create_ms": create_ms,
+            }
             if ok == 0:
                 raise CubeError(
                     f"{self.strategy} strategy: failed to create any of "

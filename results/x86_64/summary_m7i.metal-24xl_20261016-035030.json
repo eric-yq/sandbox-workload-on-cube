@@ -1,0 +1,110 @@
+{
+  "generated_at": "2026-10-16T03:50:30+0000",
+  "instance": {
+    "instance_type": "m7i.metal-24xl",
+    "instance_id": "i-01ba1ec3886548f06",
+    "region": "us-east-1",
+    "az": "us-east-1c",
+    "arch": "x86_64",
+    "kernel": "7.0.0-1014-aws",
+    "cpu_model": "Intel(R) Xeon(R) Platinum 8488C",
+    "vcpus": 96,
+    "physical_cores": 48,
+    "threads_per_core": 2.0,
+    "smt": true
+  },
+  "config": {
+    "sandbox_runtime": "cubesandbox",
+    "bench_mode": "rl",
+    "rollout_model": "one-sandbox-per-rollout",
+    "cube_api_url": "http://127.0.0.1:3000",
+    "cube_proxy_url": "http://127.0.0.1:80",
+    "cube_strategy": "fresh",
+    "transport": "cubeproxy/path",
+    "sandbox_timeout_sec": 3600,
+    "duration_sec": 60,
+    "warmup_sec": 15,
+    "cooldown_sec": 10,
+    "concurrencies": {
+      "B1": [
+        32,
+        64,
+        128,
+        256
+      ],
+      "B3": [
+        16,
+        32
+      ],
+      "B4": [
+        16,
+        32,
+        64,
+        128
+      ],
+      "B5": [
+        16,
+        32,
+        64,
+        96
+      ],
+      "B7": [
+        32,
+        64,
+        128,
+        256
+      ],
+      "B8": [
+        8,
+        32,
+        64,
+        128
+      ],
+      "B9": [
+        16,
+        32,
+        64
+      ]
+    },
+    "durations": {
+      "B1": 60,
+      "B3": 60,
+      "B4": 60,
+      "B5": 60,
+      "B7": 60,
+      "B8": 60,
+      "B9": 1800
+    },
+    "episode_steps": {
+      "B1": 32,
+      "B5": 20,
+      "B7_episodes_per_rollout": 4,
+      "B9": [
+        10,
+        30
+      ]
+    },
+    "think_time_ms": 0.0,
+    "think_time_jitter_ms": 0.0,
+    "think_time_pause": false,
+    "slo": {
+      "metric": "p95",
+      "degrade_factor": 2.0,
+      "step_p95_ms": {}
+    },
+    "templates": {
+      "B1": "arl-b1",
+      "B3": "arl-b3",
+      "B4": "arl-b4",
+      "B5": "arl-b5",
+      "B7": "arl-b7",
+      "B8": "arl-b8",
+      "B9": "arl-b9"
+    },
+    "instance_hourly_usd": 4.284,
+    "instance_price_exact": false
+  },
+  "benchmarks": {
+    "B3": []
+  }
+}

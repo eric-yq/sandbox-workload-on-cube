@@ -78,9 +78,17 @@ def _child_main(
     async def _run() -> dict:
         # The factory builds an async work_fn that captures any HTTP
         # client / state needed; it can also return a teardown coroutine.
-        work_fn, teardown = await work_factory(
+        #
+        # An optional third element carries whatever the factory measured
+        # while building its fixtures - pool stand-up time, for instance -
+        # which otherwise has no way home: it happens before the first
+        # work_fn() call, so it cannot ride a work result. Tolerating a
+        # 2-tuple keeps every existing runner working unchanged.
+        factory_out = await work_factory(
             setup=setup, seed_base=seed_base, concurrency=concurrency,
         )
+        work_fn, teardown = factory_out[0], factory_out[1]
+        fixture = factory_out[2] if len(factory_out) > 2 else None
         latencies: list[float] = []
         # Optional named channels - runners use these for per-sub-task
         # latency distributions (B9 splits B1/B3/B5; B5 splits Q01..Q22).
@@ -140,6 +148,7 @@ def _child_main(
             "latencies_ms": latencies,
             "channels": channels,
             "counters": counters,
+            "fixture": fixture,
         }
 
     try:
@@ -149,6 +158,7 @@ def _child_main(
         out_q.put({
             "completed": 0, "errors": 0,
             "latencies_ms": [], "channels": {}, "counters": {},
+            "fixture": None,
             "child_error": repr(e),
         })
 
@@ -287,6 +297,7 @@ async def drive_load_mp(
         "latency_ms": latency_summary,
         "channels": channel_summary,
         "counters": counters_total,
+        "fixtures": [r.get("fixture") for r in results],
         "nprocs": len(procs),
         "concurrency_per_proc": per_proc,
         "per_child": [

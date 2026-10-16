@@ -84,6 +84,119 @@ def _extract_p99(latency: dict) -> float:
     return 0.0
 
 
+def _headline_throughput(throughput: dict) -> str:
+    """`key=value` for the metric a runner nominates as its headline.
+
+    Runners whose headline depends on configuration (B9 reports
+    steps/sec under `hosting` and rollouts/sec under `rl`) say so with a
+    `headline` key naming another key in the same dict. Resolving it by
+    name rather than taking the first entry keeps this independent of
+    dict ordering, which is what made the previous positional version
+    print the `headline` entry itself.
+    """
+    if not isinstance(throughput, dict) or not throughput:
+        return "?"
+    key = throughput.get("headline")
+    if not (isinstance(key, str) and isinstance(throughput.get(key), (int, float))):
+        key = next(
+            (k for k, v in throughput.items() if isinstance(v, (int, float))),
+            None,
+        )
+    if key is None:
+        return "?"
+    return f"{key}={throughput[key]:.4g}"
+
+
+def _slo_density(cfg: Config, results: list[dict]) -> dict | None:
+    """Largest session count the sweep sustained inside the latency budget.
+
+    For a hosting tier this is the number that matters. Peak throughput
+    is reached past the point where step latency has already degraded, so
+    quoting it describes a machine nobody would actually run; "how many
+    agent sessions fit while steps stay fast" is the capacity question.
+
+    The budget is per-stack because B9's step mix spans two orders of
+    magnitude, and relative by default: each stack must stay within
+    `SLO_DEGRADE_FACTOR` of its own p95 at the lowest concurrency in the
+    sweep. That anchor is measured on the same host, so the comparison
+    between two instances is not smuggling in a constant chosen on one of
+    them. `SLO_STEP_P95_MS` replaces the relative budget per stack when a
+    real product SLO exists.
+
+    Two answers are reported because they differ when the curve is
+    noisy: `knee_sessions` stops at the first failing level (the
+    defensible capacity claim), `max_passing_sessions` is the largest
+    level that passed at all.
+    """
+    points = []
+    for d in results:
+        slo = (d.get("extra") or {}).get("slo")
+        if isinstance(slo, dict) and slo.get("observed_step_ms"):
+            points.append((int(d.get("concurrency") or 0), d, slo))
+    if len(points) < 2:
+        return None
+    points.sort(key=lambda t: t[0])
+
+    anchor_conc, _, anchor_slo = points[0]
+    anchor = dict(anchor_slo["observed_step_ms"])
+    factor = max(1.0, cfg.slo_degrade_factor)
+
+    budgets: dict[str, float] = {}
+    budget_kind: dict[str, str] = {}
+    for stack, base in anchor.items():
+        absolute = cfg.slo_budget_for(stack)
+        if absolute and absolute > 0:
+            budgets[stack] = float(absolute)
+            budget_kind[stack] = "absolute"
+        elif base:
+            budgets[stack] = float(base) * factor
+            budget_kind[stack] = f"relative({factor}x @ c={anchor_conc})"
+
+    levels = []
+    for conc, d, slo in points:
+        observed = slo["observed_step_ms"]
+        violations = {
+            stack: {"observed_ms": round(val, 2), "budget_ms": round(budgets[stack], 2)}
+            for stack, val in observed.items()
+            if stack in budgets and val is not None and val > budgets[stack]
+        }
+        # A level that could not create the sandboxes it asked for, or
+        # that measured the control plane rather than the workload, is
+        # not a capacity data point regardless of its latency.
+        cp = ((d.get("resource") or {}).get("control_plane") or {})
+        invalid = bool(cp.get("create_fails")) or bool(cp.get("control_plane_saturated"))
+        levels.append({
+            "sessions": conc,
+            "steps_per_sec": slo.get("steps_per_sec"),
+            "met": (not violations) and not invalid,
+            "invalid": invalid,
+            "violations": violations,
+        })
+
+    knee = None
+    for lv in levels:
+        if lv["met"]:
+            knee = lv
+        else:
+            break
+    passing = [lv for lv in levels if lv["met"]]
+    best = max(passing, key=lambda lv: lv["sessions"]) if passing else None
+
+    saturated = levels[-1]["met"]
+    return {
+        "metric": anchor_slo.get("metric", "p95"),
+        "budget_ms": {k: round(v, 2) for k, v in budgets.items()},
+        "budget_kind": budget_kind,
+        "knee_sessions": knee["sessions"] if knee else None,
+        "knee_steps_per_sec": knee["steps_per_sec"] if knee else None,
+        "max_passing_sessions": best["sessions"] if best else None,
+        # Every level passed, so the real capacity is above the sweep and
+        # `knee_sessions` is a floor, not a measurement.
+        "sweep_exhausted": saturated,
+        "levels": levels,
+    }
+
+
 async def _reap_sandboxes(cfg: Config, label: str) -> None:
     """Delete any benchmark sandbox still alive between measurement points."""
     client = client_from_config(cfg, max_connections=16)
@@ -139,8 +252,7 @@ async def run_benchmark(
         store.write_json(rel, d)
         log.info(
             "[%s] c=%d throughput=%s p99=%.1fms",
-            bid, c,
-            list(d["throughput"].items())[0] if d["throughput"] else "?",
+            bid, c, _headline_throughput(d["throughput"]),
             _extract_p99(d["latency_ms"]),
         )
 
@@ -219,9 +331,35 @@ async def run_benchmark(
     rollup = {
         "benchmark": bid,
         "workload": runner.workload,
+        "mode": cfg.bench_mode,
         "instance": instance,
         "runs": results,
     }
+    density = _slo_density(cfg, results)
+    if density:
+        rollup["slo_density"] = density
+        if density["knee_sessions"] is None:
+            log.warning(
+                "[%s] no concurrency level met the step-latency budget, not "
+                "even the anchor level itself. Either the sweep starts above "
+                "capacity or SLO_STEP_P95_MS is tighter than this host can "
+                "serve; check extra.slo.observed_step_ms per level.", bid,
+            )
+        elif density["sweep_exhausted"]:
+            log.info(
+                "[%s] SLO density >= %d sessions at %.1f steps/s - every level "
+                "in the sweep passed, so capacity is above the sweep. Raise "
+                "%s_CONCURRENCIES to find the knee.",
+                bid, density["knee_sessions"], density["knee_steps_per_sec"] or 0.0,
+                bid,
+            )
+        else:
+            log.info(
+                "[%s] SLO density: %d sessions at %.1f steps/s within the step "
+                "%s budget (%s)", bid, density["knee_sessions"],
+                density["knee_steps_per_sec"] or 0.0, density["metric"],
+                ", ".join(f"{k}<={v:.0f}ms" for k, v in density["budget_ms"].items()),
+            )
     store.write_json(f"{instance['arch']}/{out_dir}/rollup.json", rollup)
     log.info("=== %s done, %d concurrency points ===", bid, len(results))
     return results
@@ -254,9 +392,12 @@ def _primary_throughput(bid: str, throughput: dict) -> tuple[float, str]:
     info = PRIMARY_UNITS.get(bid)
     if info and info["tput_key"] in throughput:
         return throughput[info["tput_key"]] or 0.0, info["unit"]
-    # Fallback: first numeric value, generic label.
-    k, v = next(iter(throughput.items()))
-    return (v or 0.0), "ops/s"
+    # Fallback: first numeric value, generic label. Must skip
+    # non-numeric entries - `headline` is a key name, not a rate.
+    for v in throughput.values():
+        if isinstance(v, (int, float)):
+            return (v or 0.0), "ops/s"
+    return 0.0, "ops/s"
 
 
 def render_html(summary: dict, out_path: Path) -> None:
@@ -717,7 +858,11 @@ async def main() -> int:
         "instance": instance,
         "config": {
             "sandbox_runtime": "cubesandbox",
-            "rollout_model": "one-sandbox-per-rollout",
+            "bench_mode": cfg.bench_mode,
+            "rollout_model": (
+                "pooled-session-per-sandbox" if cfg.cube_strategy == "pool"
+                else "one-sandbox-per-rollout"
+            ),
             "cube_api_url": cfg.cube_api_url,
             "cube_proxy_url": cfg.cube_proxy_url,
             "cube_strategy": cfg.cube_strategy,
@@ -734,9 +879,16 @@ async def main() -> int:
                 "B1": cfg.b1_episode_steps,
                 "B5": cfg.b5_episode_steps,
                 "B7_episodes_per_rollout": cfg.b7_episodes_per_rollout,
+                "B9": list(cfg.b9_episode_range()),
             },
             "think_time_ms": cfg.think_time_ms,
+            "think_time_jitter_ms": cfg.think_time_jitter_ms,
             "think_time_pause": cfg.think_time_pause,
+            "slo": {
+                "metric": cfg.slo_metric,
+                "degrade_factor": cfg.slo_degrade_factor,
+                "step_p95_ms": dict(cfg.slo_step_p95_ms),
+            },
             "templates": {bid: cfg.template_for(bid) for bid in sorted(ALL_RUNNERS)},
             # Resolve through hourly_price, not cfg.price_for: the former
             # also applies the legacy .4xlarge fallback, so the summary

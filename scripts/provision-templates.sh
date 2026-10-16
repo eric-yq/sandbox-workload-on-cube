@@ -113,6 +113,49 @@ print(doc if doc is not None else "")
 # B5 gets the most memory of the single-stack templates because DuckDB
 # holds the whole TPC-H sf=1 dataset in memory; B4 needs headroom for
 # Chromium; B9 carries all five stacks at once.
+#
+# B9S is the same image and services as B9 at 1 vCPU / 1 GiB, built under
+# its own alias so it never replaces arl-b9 - the two are meant to be
+# compared, not swapped. It exists because the node admits
+# `QuotaCpu / template_cpu` sandboxes, so B9's 4 vCPU shape caps a
+# 192,000-millicore host at 48 sandboxes. That is nowhere near enough to
+# load the host when each session idles through a think-time delay, which
+# is the hosting archetype. At 1 vCPU the same host admits 192.
+#
+# Memory, not CPU, is what cannot be cut, and it keeps the full 4096 MiB.
+# Only the vCPU count drops. That was established by measurement, in two
+# stages, and both stages are worth knowing because each failure mode
+# hides the other:
+#
+#  1. Build. At 1024 MiB the build fails in CREATING_TEMPLATE on both
+#     architectures - the rootfs artifact distributes fine (1/1 ready),
+#     then the microVM never gets :8010/healthz to answer and the
+#     snapshot deadline expires. Bisecting separated the dimensions: 1
+#     vCPU with 2048 MiB builds, 2 vCPU with 1024 MiB does not.
+#  2. Load. 2048 MiB then *builds and smoke-tests clean* and still fails
+#     ~98% of rollouts under a real session, because B5's DuckDB gets
+#     killed mid-query and CubeProxy starts returning 502 for :8005.
+#     The build gate and the smoke test each touch a service once, so
+#     neither can see a service that dies only once TPC-H queries start
+#     allocating. The standalone arl-b5 template is given 3072 MiB for
+#     DuckDB *alone*; B9 also carries Chromium and three Python
+#     services, hence 4096.
+#
+# Density still improves, just less than the vCPU arithmetic suggests.
+# The node admits min(QuotaCpu/cpu, QuotaMem/mem) sandboxes:
+#   arl-b9       4 vCPU / 4096 MiB -> min(48, 117)  =  48
+#   arl-b9-small 1 vCPU / 4096 MiB -> min(192, 117) = 117
+# So the cap moves from CPU-bound 48 to memory-bound 117 (2.4x) and
+# cutting vCPU further buys nothing. Going past 117 needs a smaller
+# workload, not a smaller template.
+#
+# Because a 1 vCPU guest cold-starts all five stacks in more than the 30s
+# CubeMaster allows (cubelet_conf.common_timeout_insec in
+# CubeMaster/conf.yaml), building this template needs that raised
+# temporarily. It gates template build only - sandbox create from the
+# finished snapshot is ~85ms - so raise it, build, and put it back.
+#
+# Select the template at run time with TEMPLATE_B9=arl-b9-small.
 # ------------------------------------------------------------------
 templates_spec() {
   cat <<'SPEC'
@@ -123,6 +166,7 @@ B5|arl-b5|b5|8005
 B7|arl-b7|b7|8007
 B8|arl-b8|b3|8003
 B9|arl-b9|b1 b3 b4 b5 b7 static|8001 8003 8004 8005 8007 80
+B9S|arl-b9-small|b1 b3 b4 b5 b7 static|8001 8003 8004 8005 8007 80
 SPEC
 }
 

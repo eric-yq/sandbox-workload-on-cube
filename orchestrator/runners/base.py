@@ -111,22 +111,49 @@ def hourly_price(instance_type: str, cfg: Config) -> float:
     return base_4xl * (vcpus / 16.0)
 
 
-def cost_block(throughput_per_sec: float, duration: float, instance_type: str, cfg: Config) -> dict:
+def cost_block(
+    throughput_per_sec: float,
+    duration: float,
+    instance_type: str,
+    cfg: Config,
+    *,
+    unit: str = "rollout",
+    secondary_units: dict[str, float] | None = None,
+) -> dict:
     """Cost per unit of work, charging the whole instance for the run.
 
     Both per-1k and per-1M are reported: per-1k reads naturally for the
     slower archetypes (browser trajectories), per-1M for the fast ones
     (tool calls) and is what the write-up tables use.
+
+    `unit` names what one unit is, because the answer differs by
+    archetype and the bare name `units` has been actively misleading: for
+    an RL rollout a unit is one episode, but for a hosted agent session a
+    "rollout" is the entire session, so cost-per-unit then varies with
+    session length and think time rather than with the machine. Pass
+    `secondary_units={"step": steps_per_sec}` to get the per-step cost
+    alongside it - that is the figure that stays comparable across both
+    shapes.
     """
     price_h = hourly_price(instance_type, cfg)
-    total_units = max(throughput_per_sec * duration, 1e-9)
     cost_run = price_h * (duration / 3600.0)
-    per_unit = (cost_run / total_units) if price_h > 0 else None
-    return {
+
+    def _per(rate: float) -> float | None:
+        total = max(rate * duration, 1e-9)
+        return (cost_run / total) if price_h > 0 else None
+
+    per_unit = _per(throughput_per_sec)
+    out: dict[str, Any] = {
         "instance_hourly_usd": price_h,
+        "unit": unit,
         "cost_per_1k_units_usd": per_unit * 1000.0 if per_unit is not None else None,
         "cost_per_1m_units_usd": per_unit * 1_000_000.0 if per_unit is not None else None,
     }
+    for name, rate in (secondary_units or {}).items():
+        per = _per(float(rate or 0.0))
+        out[f"cost_per_1k_{name}s_usd"] = per * 1000.0 if per is not None else None
+        out[f"cost_per_1m_{name}s_usd"] = per * 1_000_000.0 if per is not None else None
+    return out
 
 
 def load_gen_block(mp_result: dict) -> dict:
@@ -168,19 +195,108 @@ def sandbox_extra_block(cfg: Config, mp_result: dict) -> dict:
     create_p50 = (channels.get("sandbox_create") or {}).get("p50") or 0.0
     release_p50 = (channels.get("sandbox_release") or {}).get("p50") or 0.0
     overhead = create_p50 + release_p50
+    reused = cfg.cube_strategy == "pool"
     return {
+        "mode": cfg.bench_mode,
         "strategy": cfg.cube_strategy,
         "transport": cfg.transport_label(),
-        "one_sandbox_per_rollout": cfg.cube_strategy != "pool",
-        # The distinction `rollback` newly buys: a reused sandbox whose
-        # state *is* reset between rollouts. `pool` is the only strategy
-        # that leaks state from one rollout into the next, which is why its
-        # throughput is a reference ceiling rather than a headline number.
-        "state_reset_between_rollouts": cfg.cube_strategy != "pool",
+        "one_sandbox_per_rollout": not reused,
+        # Whether sandbox state survives from one rollout to the next.
+        # `rollback` reuses a sandbox but restores it from a snapshot
+        # first; `pool` hands the same dirty sandbox straight back out.
+        #
+        # Whether that is a defect depends entirely on the archetype, so
+        # it is reported as a fact and interpreted by `mode`. Under `rl`
+        # it is contamination between training episodes and makes the
+        # throughput a reference ceiling rather than a headline. Under
+        # `hosting` it is the thing being sold: one long-lived agent
+        # session whose files, installed packages and interpreter
+        # namespace persist across steps. Same mechanism, opposite
+        # meaning.
+        "state_reset_between_rollouts": not reused,
+        "session_reuse": reused,
         "sandbox_timeout_sec": cfg.cube_sandbox_timeout_sec,
         "provisioning_share_p50": round(overhead / rollout_p50, 4) if rollout_p50 else None,
         "think_time_ms": cfg.think_time_ms,
+        "think_time_jitter_ms": cfg.think_time_jitter_ms,
         "think_time_pause": cfg.think_time_pause,
+    }
+
+
+def pool_fill_block(mp_result: dict) -> dict | None:
+    """How long it took to stand the sandbox fleet up, and at what rate.
+
+    Pool/clone/rollback pre-create their sandboxes in
+    `SandboxProvider.start()`, deliberately outside the measured window -
+    for a hosting tier that cost is amortised over a session lasting
+    hours, so charging it to the first step would be wrong.
+
+    But "outside the window" had meant "discarded", and fleet stand-up
+    time is itself a product metric: it is the scale-out latency when a
+    hosting tier has to add capacity, and it is exactly where the 4 KiB
+    arm64 create path shows up. So it is reported separately instead.
+
+    Aggregated across load-generator children: each child fills its own
+    slice of the pool concurrently, so `wall_ms` is the max (when the
+    last child finished) while the counts and failures sum.
+    """
+    fixtures = [f for f in (mp_result.get("fixtures") or []) if f]
+    fills = [f.get("pool_fill") for f in fixtures if f.get("pool_fill")]
+    if not fills:
+        return None
+
+    requested = sum(int(f.get("requested") or 0) for f in fills)
+    created = sum(int(f.get("created") or 0) for f in fills)
+    failed = sum(int(f.get("failed") or 0) for f in fills)
+    wall_ms = max((float(f.get("wall_ms") or 0.0) for f in fills), default=0.0)
+    per_create = [p for f in fills for p in (f.get("create_ms") or [])]
+
+    out: dict[str, Any] = {
+        "strategy": fills[0].get("strategy"),
+        "requested": requested,
+        "created": created,
+        "failed": failed,
+        "wall_ms": round(wall_ms, 2),
+        "creates_per_sec": round(created / (wall_ms / 1000.0), 2) if wall_ms > 0 else None,
+    }
+    if per_create:
+        import numpy as np
+
+        a = np.array(per_create)
+        out["create_ms"] = {
+            "count": int(a.size),
+            "p50": float(np.percentile(a, 50)),
+            "p95": float(np.percentile(a, 95)),
+            "p99": float(np.percentile(a, 99)),
+            "mean": float(a.mean()),
+            "max": float(a.max()),
+        }
+    return out
+
+
+def slo_block(cfg: Config, per_task: dict, sessions: int, steps_per_sec: float) -> dict:
+    """The observed step latency this concurrency level delivered.
+
+    Deliberately only *records*; the pass/fail verdict needs the whole
+    sweep (the relative budget is anchored on the lowest concurrency
+    point), so it is computed at roll-up time in main.py. Keeping the
+    judgement out of here means a single result file is never stale with
+    respect to a budget change.
+    """
+    metric = cfg.slo_metric if cfg.slo_metric in ("p50", "p95", "p99") else "p95"
+    observed = {
+        stack: v.get(metric)
+        for stack, v in (per_task or {}).items()
+        if isinstance(v, dict) and v.get(metric) is not None
+    }
+    return {
+        "metric": metric,
+        "sessions": sessions,
+        "steps_per_sec": steps_per_sec,
+        "steps_per_sec_per_session": round(steps_per_sec / sessions, 4) if sessions else None,
+        "observed_step_ms": observed,
+        "budget_ms": {k: v for k, v in (cfg.slo_step_p95_ms or {}).items()},
+        "degrade_factor": cfg.slo_degrade_factor,
     }
 
 

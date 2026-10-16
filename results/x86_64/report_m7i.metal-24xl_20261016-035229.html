@@ -1,0 +1,46 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<title>Agentic-RL Sandbox Bench - m7i.metal-24xl</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0"></script>
+<style>
+body{font-family:system-ui,sans-serif;max-width:1200px;margin:2rem auto;padding:0 1rem}
+table{border-collapse:collapse;width:100%;margin:1rem 0}
+th,td{border:1px solid #ddd;padding:6px 10px;text-align:right}
+th{background:#f5f5f5}
+h1{font-size:1.4rem} h2{font-size:1.1rem;margin-top:2rem}
+h3{font-size:1rem;margin-top:1rem;color:#444}
+.meta{color:#666;font-size:.9rem}
+</style></head><body>
+<h1>Agentic-RL Sandbox Benchmark <span style="font-weight:400;color:#888">on CubeSandbox</span></h1>
+<p class="meta">
+  Instance: <b>m7i.metal-24xl</b> (x86_64)
+  &middot; Region: us-east-1
+  &middot; Generated: 2026-10-16T03:51:08+0000
+</p>
+<p class="meta">
+  CPU: 96 vCPU / <b>48 physical cores</b>
+  (2.0 threads per core, SMT)
+  &middot; Intel(R) Xeon(R) Platinum 8488C
+  &middot; kernel 7.0.0-1014-aws
+</p>
+<p class="meta">
+  Sandbox runtime: CubeSandbox (RustVMM/KVM microVM), one sandbox per rollout
+  &middot; strategy: <b>fresh</b>
+  &middot; transport: cubeproxy/path
+</p>
+<p class="meta" style="background:#f8f8e8;padding:.6rem;border-left:3px solid #cc0">
+  Read physical cores, not vCPU, when comparing architectures: at the same
+  192 vCPU, m7i/m8i are 96 cores plus SMT while m8g/m9g are 192 real cores.
+  A fleet of hundreds of single-vCPU microVMs is exactly the workload shape
+  where that difference shows up.
+</p>
+<h2>All runs</h2>
+<table>
+<tr><th>Benchmark</th><th>Concurrency</th><th>Throughput</th>
+    <th>P99 (ms)</th><th>CPU avg (%)</th><th>$/1k units</th></tr>
+<tr><td style='text-align:left'>B3<br><span style='color:#888;font-size:.8em'>Tool Call</span></td><td>16</td><td>38.78 <span style='color:#888;font-size:.85em'>traj/s</span></td><td>456.9</td><td>34.0</td><td>0.0307</td></tr>
+</table>
+<h2>Rollout lifecycle - provisioning vs work</h2><p class='meta'>One microVM per rollout. <code>create</code> is create-until-first-request-accepted, i.e. how long before a trainer can dispatch a tool call. A high provisioning share means the episode is too short to amortise the sandbox.</p><table><tr><th style='text-align:left'>Benchmark</th><th>Concurrency</th><th style='text-align:left'>Strategy</th><th>create p50</th><th>create p99</th><th>steps p50</th><th>release p50</th><th>provisioning share</th></tr><tr><td style='text-align:left'>B3</td><td>16</td><td style='text-align:left'>fresh</td><td>115.9</td><td>135.3</td><td>33.9</td><td>262.0</td><td>91.3%</td></tr></table>
+<h2>Control plane</h2><p class='meta'>CPU cores consumed by CubeSandbox itself, per component. <b>CubeProxy</b> routes every in-sandbox request unless the transport is <code>direct</code>; <b>CubeAPI</b>, <b>CubeMaster</b> and <b>Cubelet</b> sit on the create/delete path. <b>Fleet</b> is the microVMs themselves - that column is supposed to be large. <code>create fails</code> is counted by the load generator, because CubeSandbox exports no such counter.</p><table><tr><th style='text-align:left'>Benchmark</th><th>Concurrency</th><th>CubeProxy cores</th><th>CubeAPI cores</th><th>CubeMaster cores</th><th>Cubelet cores</th><th>ctl share of host</th><th>fleet cores</th><th>sandboxes</th><th>create fails</th><th>verdict</th></tr><tr><td style='text-align:left'>B3</td><td>16</td><td>0.00</td><td>0.03</td><td>0.28</td><td>4.85</td><td>5.4%</td><td>18.37</td><td>16 / 943</td><td>0</td><td><span style='color:#080'>ok</span></td></tr></table>
+<h2>Disk (EBS)</h2><p class='meta'>No target metal instance type has instance store, so all sandbox I/O lands on the EBS volume behind <code>/data/cubelet</code>. Reads should be near zero after warmup: sandboxes restore from a per-node memory snapshot through reflink copy-on-write, so an untouched page is shared rather than re-read. Writes are per-rollout lifecycle churn - a CoW upper layer, a shim log and a snapshot pack created and destroyed for every rollout - which makes the load IOPS-shaped rather than bandwidth-shaped.</p><p class='meta'><b>Read <code>await</code>, not <code>util</code>.</b> For a network-attached volume, util only means "at least one I/O in flight" and can sit high while far from the provisioned limit (measured: 43-56% util at ~740 IOPS on a 10,000 IOPS gp3). EBS throttles by queueing, so rising service time with flat throughput is the real signal. gp3 normally serves in ~1 ms.</p><table><tr><th style='text-align:left'>Benchmark</th><th>Concurrency</th><th style='text-align:left'>Device</th><th>IOPS avg</th><th>IOPS p95</th><th>read MB/s</th><th>write MB/s</th><th>await p95 (ms)</th><th>queue p95</th><th>util p95</th><th>verdict</th></tr><tr><td style='text-align:left'>B3</td><td>16</td><td style='text-align:left'>nvme0n1,nvme1n1</td><td>913</td><td>1,158</td><td>0.6</td><td>14.6</td><td>1.09</td><td>1.3</td><td>62%</td><td><span style='color:#080'>ok</span></td></tr></table>
+</body></html>
